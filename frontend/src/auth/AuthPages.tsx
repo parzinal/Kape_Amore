@@ -15,22 +15,23 @@ function AuthShell({ children, title, subtitle }: {
 }) {
   return (
     <main className="auth-page">
-      <section className="auth-panel" aria-labelledby="auth-title">
-        <Link className="auth-brand" to="/" aria-label="Kape Amore home">
-          <img src="/images/kape-amore-logo.png" alt="" />
-          <span>KAPE <em>AMORE</em></span>
-        </Link>
-        <p className="auth-eyebrow">WELCOME TO KAPE AMORE</p>
-        <h1 id="auth-title">{title}</h1>
-        <p className="auth-subtitle">{subtitle}</p>
-        {children}
-        <Link className="auth-back" to="/">← Back to Kape Amore</Link>
-      </section>
-      <aside className="auth-image" aria-label="Coffee being prepared in a café">
-        <div className="auth-image-shade" />
-        <p>Good coffee.<br />A place to <em>belong.</em></p>
-        <span>COFFEE · FOOD · GOOD VIBES</span>
-      </aside>
+      <div className="auth-card">
+        <aside className="auth-art" aria-label="Kape Amore coffee and café">
+          <img className="auth-art-logo" src="/images/kape-amore-logo.png" alt="Kape Amore logo" />
+          <p className="auth-art-title">Find your<br /><strong>coffee moment.</strong></p>
+          <p className="auth-art-copy">A good cup to accompany your day.</p>
+          <span>COFFEE · FOOD · GOOD VIBES</span>
+          <i className="auth-art-bean" aria-hidden="true" />
+        </aside>
+        <section className="auth-panel" aria-labelledby="auth-title">
+          <Link className="auth-brand" to="/" aria-label="Kape Amore home">KAPE <em>AMORE</em></Link>
+          <p className="auth-eyebrow">WELCOME BACK</p>
+          <h1 id="auth-title">{title}</h1>
+          <p className="auth-subtitle">{subtitle}</p>
+          {children}
+          <Link className="auth-back" to="/">← Back to Kape Amore</Link>
+        </section>
+      </div>
     </main>
   );
 }
