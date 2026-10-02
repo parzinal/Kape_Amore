@@ -264,4 +264,4 @@ The React frontend includes a responsive customer-facing café homepage in `fron
 
 ## Authentication
 
-The frontend contains login, customer registration, forgot/reset-password forms, and role-aware account/admin routes. Public sign-up creates customer accounts only; admin provisioning is separate. The Laravel backend still needs to be scaffolded and implement the required cookie-based authentication and server-side role authorization. See [AUTHENTICATION.md](./AUTHENTICATION.md) before enabling these flows.
+The frontend contains login, customer registration, forgot/reset-password forms, and role-aware account/admin routes. The Laravel 13 backend now implements Sanctum cookie-based authentication, customer-only public registration, password reset, role persistence, rate limiting, and an admin-only API example. See [AUTHENTICATION.md](./AUTHENTICATION.md) for local setup and security requirements; the remaining POS API and database tables are not implemented yet.

@@ -1,0 +1,29 @@
+# Local secrets and environment configuration
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# PHP / Laravel dependencies and generated files
+/backend/vendor/
+/backend/bootstrap/cache/*.php
+/backend/storage/*.key
+/backend/storage/framework/cache/*
+/backend/storage/framework/sessions/*
+/backend/storage/framework/views/*
+/backend/storage/logs/*
+/backend/database/*.sqlite
+
+# Frontend dependencies and generated builds
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.vite/
+
+# Accidental nested GitHub Desktop repository inside the project
+/Kape_Amore/
+
+# Editor and operating system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -42,8 +42,56 @@ function useFormError() {
   return { error, setError, busy, setBusy };
 }
 
+function PasswordInput({
+  id,
+  value,
+  onChange,
+  autoComplete,
+  minLength,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete: string;
+  minLength?: number;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <span className="auth-password-field">
+      <input
+        id={id}
+        autoComplete={autoComplete}
+        minLength={minLength}
+        onChange={(event) => onChange(event.target.value)}
+        required
+        type={visible ? "text" : "password"}
+        value={value}
+      />
+      <button
+        aria-label={visible ? "Hide password" : "Show password"}
+        aria-pressed={visible}
+        className="auth-password-toggle"
+        onClick={() => setVisible((isVisible) => !isVisible)}
+        type="button"
+      >
+        {visible ? (
+          <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+            <path d="M3 3l18 18M10.6 10.7a2 2 0 002.7 2.7M9.9 5.2A10.8 10.8 0 0112 5c5.2 0 9 4.4 10 7-.3 1-1.2 2.4-2.5 3.6M6.2 6.3C3.9 7.7 2.4 9.9 2 12c.5 1.6 3.3 7 10 7 1.2 0 2.3-.2 3.3-.6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+          </svg>
+        ) : (
+          <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+            <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.7" />
+            <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.7" />
+          </svg>
+        )}
+      </button>
+    </span>
+  );
+}
+
 export function LoginPage() {
-  const { user, status, signIn, refresh } = useAuth();
+  const { user, status, error: serviceError, signIn, refresh } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState("");
@@ -71,7 +119,8 @@ export function LoginPage() {
     <AuthShell title="Welcome back." subtitle="Sign in to continue to your Kape Amore account.">
       {status === "error" && (
         <div className="auth-notice" role="alert">
-          <span>The account service is currently unavailable.</span>
+          <span>We can’t connect to the account service. Make sure Laravel is running, then try again.</span>
+          {serviceError && <span className="auth-notice-detail">{serviceError}</span>}
           <button type="button" onClick={() => void refresh()}>Try again</button>
         </div>
       )}
@@ -79,11 +128,9 @@ export function LoginPage() {
         <label htmlFor="login-email">Email address</label>
         <input id="login-email" autoComplete="email" inputMode="email" onChange={(event) => setEmail(event.target.value)} required type="email" value={email} />
 
-        <div className="auth-label-row">
-          <label htmlFor="login-password">Password</label>
-          <Link to="/forgot-password">Forgot password?</Link>
-        </div>
-        <input id="login-password" autoComplete="current-password" onChange={(event) => setPassword(event.target.value)} required type="password" value={password} />
+        <label htmlFor="login-password">Password</label>
+        <PasswordInput id="login-password" autoComplete="current-password" onChange={setPassword} value={password} />
+        <Link className="auth-forgot-link" to="/forgot-password">Forgot password?</Link>
 
         <label className="auth-check">
           <input checked={remember} onChange={(event) => setRemember(event.target.checked)} type="checkbox" />
@@ -131,10 +178,10 @@ export function RegisterPage() {
         <label htmlFor="register-email">Email address</label>
         <input id="register-email" autoComplete="email" inputMode="email" onChange={(event) => setEmail(event.target.value)} required type="email" value={email} />
         <label htmlFor="register-password">Password</label>
-        <input id="register-password" autoComplete="new-password" minLength={12} onChange={(event) => setPassword(event.target.value)} required type="password" value={password} />
+        <PasswordInput id="register-password" autoComplete="new-password" minLength={12} onChange={setPassword} value={password} />
         <p className="auth-hint">Use at least 12 characters. A password manager is a good idea.</p>
         <label htmlFor="register-confirmation">Confirm password</label>
-        <input id="register-confirmation" autoComplete="new-password" onChange={(event) => setConfirmation(event.target.value)} required type="password" value={confirmation} />
+        <PasswordInput id="register-confirmation" autoComplete="new-password" onChange={setConfirmation} value={confirmation} />
         {error && <p className="auth-error" role="alert">{error}</p>}
         <button className="auth-submit" disabled={busy} type="submit">{busy ? "Creating account…" : "Create account"} <span aria-hidden="true">→</span></button>
         <p className="auth-terms">Account creation is for customer accounts. Staff and admin access is managed separately.</p>
@@ -211,45 +258,13 @@ export function ResetPasswordPage() {
         <label htmlFor="reset-email">Email address</label>
         <input id="reset-email" autoComplete="email" onChange={(event) => setEmail(event.target.value)} required type="email" value={email} />
         <label htmlFor="reset-password">New password</label>
-        <input id="reset-password" autoComplete="new-password" minLength={12} onChange={(event) => setPassword(event.target.value)} required type="password" value={password} />
+        <PasswordInput id="reset-password" autoComplete="new-password" minLength={12} onChange={setPassword} value={password} />
         <label htmlFor="reset-confirmation">Confirm new password</label>
-        <input id="reset-confirmation" autoComplete="new-password" onChange={(event) => setConfirmation(event.target.value)} required type="password" value={confirmation} />
+        <PasswordInput id="reset-confirmation" autoComplete="new-password" onChange={setConfirmation} value={confirmation} />
         {error && <p className="auth-error" role="alert">{error}</p>}
         <button className="auth-submit" disabled={busy} type="submit">{busy ? "Updating…" : "Update password"} <span aria-hidden="true">→</span></button>
       </form>
     </AuthShell>
-  );
-}
-
-export function AccountPage() {
-  const { user, signOut } = useAuth();
-  const navigate = useNavigate();
-  const [error, setError] = useState<string | null>(null);
-
-  async function logout() {
-    setError(null);
-    try {
-      await signOut();
-      navigate("/", { replace: true });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to sign out.");
-    }
-  }
-
-  return (
-    <main className="account-page">
-      <header className="account-header">
-        <Link className="account-brand" to="/"><img src="/images/kape-amore-logo.png" alt="" /> KAPE AMORE</Link>
-        <button className="account-signout" onClick={() => void logout()} type="button">Sign out</button>
-      </header>
-      <section className="account-card">
-        <p className="auth-eyebrow">YOUR KAPE AMORE ACCOUNT</p>
-        <h1>Hello, {user?.name}.</h1>
-        <p>You’re signed in as a customer. Your account area is ready for order history and saved details.</p>
-        {error && <p className="auth-error" role="alert">{error}</p>}
-        <Link className="account-menu-link" to="/#menu">Browse the menu <span aria-hidden="true">→</span></Link>
-      </section>
-    </main>
   );
 }
 

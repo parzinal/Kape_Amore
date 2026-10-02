@@ -1,32 +1,21 @@
 # Kape Amore Authentication
 
-## Current frontend behavior
+## Implemented
 
-The React app provides `/login`, `/register`, `/forgot-password`, `/reset-password`, `/account`, and `/admin` routes.
-
-- Public registration submits only a name, email, and password. It does not accept a role.
-- Admins are sent to `/admin` only when the authenticated server response includes the `admin` role.
-- Customers are sent to `/account`. The frontend redirects a non-admin away from `/admin` and redirects an admin away from `/account`.
-- Protected routes fetch the current user from the server and fail closed if the server cannot verify the session.
-- Session authentication uses cookies and the Sanctum CSRF endpoint; no bearer token or password is saved in browser storage.
-
-The Laravel backend in this repository has not yet been scaffolded. Until its authentication endpoints and server-side authorization are implemented, the sign-in, registration, and password-reset forms cannot authenticate accounts, and the frontend route checks alone are not a security boundary.
-
-## Required Laravel API contract
-
-Set `VITE_API_URL` in `frontend/.env` to the Laravel origin (for local development, typically `http://127.0.0.1:8000`). The frontend expects these endpoints:
+The Laravel 13 API in `backend/` now provides the cookie-based authentication contract used by the React app:
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/sanctum/csrf-cookie` | Initialize the session CSRF cookie |
 | POST | `/login` | Authenticate credentials and return the user |
-| POST | `/register` | Create a customer account only |
-| POST | `/forgot-password` | Request a password-reset email |
-| POST | `/reset-password` | Apply a valid reset token |
-| POST | `/logout` | Invalidate the current session |
-| GET | `/api/user` | Return the current authenticated user or 401 |
+| POST | `/register` | Create and sign in a customer account |
+| POST | `/forgot-password` | Send a password-reset link without revealing whether an email exists |
+| POST | `/reset-password` | Apply a valid, unexpired reset token |
+| POST | `/logout` | Invalidate the current session and CSRF token |
+| GET | `/api/user` | Return the authenticated user's minimal identity or 401 |
+| GET | `/api/admin/me` | Example admin-only endpoint, protected on the server |
 
-Successful login, registration, and current-user responses must have this shape:
+Login, registration, and current-user responses use this shape:
 
 ```json
 {
@@ -39,18 +28,49 @@ Successful login, registration, and current-user responses must have this shape:
 }
 ```
 
-Use `roles: ["admin"]` for an admin account. Laravel validation failures should use the normal JSON `message` and `errors` response format. The password-reset request should return a generic confirmation whether or not the email exists.
+Registration validates a minimum 12-character password, rejects submitted role/permission fields, hashes passwords through Laravel, and assigns only the `customer` role inside a database transaction. Roles are seeded without creating a default administrator. Create an administrator through the interactive `php artisan kape:create-admin` command after migrating and seeding; it prompts for the password without echoing it. Login and password-reset requests are rate-limited; login regenerates the session ID. Password resets use Laravel's password broker and send reset URLs to the React route.
 
-## Server-side requirements (mandatory)
+## Local setup with Laragon
 
-The Laravel API must be the authority for identity and access. A React route guard can improve navigation but cannot protect data or operations.
+Requirements: PHP 8.3+, Composer, MySQL 8+, and Node/npm. Start Apache/MySQL from Laragon (only MySQL is required for these API commands), then create an empty MySQL database named `kape_amore` using HeidiSQL or phpMyAdmin.
 
-1. Configure Sanctum as a stateful SPA using HttpOnly, Secure-in-production, SameSite cookies, CSRF protection, credentialed CORS, and the correct stateful domains. Serve the frontend and API over HTTPS in production.
-2. Rate-limit login and password-reset attempts. Use Laravel's password hashing and password broker, regenerate the session after login, and invalidate the session plus CSRF token on logout.
-3. Public registration must assign the `customer` role server-side in a transaction, ignore/reject any submitted role or permission fields, and never create an administrator.
-4. Provision admin accounts only through a controlled server-side seed/CLI process or an existing admin workflow. Do not ship a default admin password.
-5. Protect every admin API route with both authentication and a server-side admin-role/permission check, for example `auth:sanctum` plus an `admin` authorization middleware/policy. Do not rely on `/admin` frontend routing for authorization.
-6. Return only the minimal user identity and role names required by the frontend. Never return password hashes, reset tokens, or session secrets.
-7. Test public registration privilege escalation, invalid credentials, session fixation, CSRF rejection, rate limits, password reset token expiry, unauthenticated API access, and customer access to admin endpoints.
+From a terminal in the project:
 
-Set the API origin without a trailing slash in `frontend/.env`; do not commit production secrets or environment files.
+```powershell
+cd backend
+Copy-Item .env.example .env
+composer install
+php artisan key:generate
+php artisan migrate --seed
+php artisan serve --host=127.0.0.1 --port=8000
+```
+
+If `php` or `composer` is not recognized, open Laragon's Terminal so its PHP and Composer paths are available. The local `.env.example` assumes Laragon's default MySQL user (`root`) with no password; change `DB_USERNAME` and `DB_PASSWORD` in the untracked `backend/.env` if your local database differs. Never commit `.env`.
+
+In a second terminal, start the frontend:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend's `.env.example` points to `http://127.0.0.1:8000`. The backend allows Vite on ports 5173 and 5174 for local development. If Vite selects a different port, update `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, and `SANCTUM_STATEFUL_DOMAINS` in the untracked `backend/.env`; also update `VITE_API_URL` if the API origin changes.
+
+For local password-reset testing, `MAIL_MAILER=log` writes the generated link to `backend/storage/logs/laravel.log`. Configure a real mail transport before using password resets outside local development.
+
+Run the authentication feature tests using SQLite in memory:
+
+```powershell
+cd backend
+php artisan test
+```
+
+## Security and deployment requirements
+
+- Sanctum stateful SPA middleware, CSRF protection, credentialed CORS, and role middleware are configured. Keep allowed origins explicit; never use wildcard origins with credentials.
+- Use HTTPS in production and set `SESSION_SECURE_COOKIE=true`. Keep session cookies HttpOnly and SameSite=Lax, and configure the production frontend/API domains in `SANCTUM_STATEFUL_DOMAINS`, `CORS_ALLOWED_ORIGINS`, and `FRONTEND_URL`.
+- Public registration must remain customer-only. Provision administrators through a controlled, authenticated administrative process; do not add a public admin-registration path or ship a default admin password.
+- Protect every future admin API route with `auth:sanctum` and `role:admin`. A frontend route guard is not an authorization boundary.
+- Return only minimal identity and role names; never expose password hashes, reset tokens, or session secrets.
+- Configure a production mail provider and verify reset-link expiry, CSRF rejection, rate limits, inactive-account denial, and authorization at the API boundary before launch.

@@ -2,7 +2,7 @@
 
 ## 1. Purpose and conventions
 
-This document proposes the MySQL 8 schema for the Kape Amore Laravel REST API and React POS. It is a design reference for implementing Laravel migrations; it is not an SQL dump or a set of migrations.
+This document describes the MySQL 8 schema for the Kape Amore Laravel REST API and React POS. The Laravel authentication tables (`users`, `password_reset_tokens`, `sessions`, `roles`, and `role_user`) are implemented as migrations in `backend/database/migrations`; the remaining POS tables are a design reference and are not yet migrations.
 
 - Use InnoDB and `utf8mb4`.
 - Use Laravel `BIGINT UNSIGNED` auto-increment primary keys (`id`) and matching foreign keys.
@@ -37,7 +37,7 @@ users ──< activity_logs
 
 ## 3. Authentication and access control
 
-Use Laravel's standard `users` table and Sanctum's `personal_access_tokens` table. Include the standard password reset table if the chosen Laravel version's authentication setup uses it.
+Use Laravel's standard `users` and `password_reset_tokens` tables plus the database-backed `sessions` table. Sanctum is installed for stateful SPA authentication; personal access tokens are not used for the browser login flow.
 
 ### `users`
 
@@ -45,24 +45,23 @@ Use Laravel's standard `users` table and Sanctum's `personal_access_tokens` tabl
 |---|---|---|
 | `id` | BIGINT UNSIGNED PK | |
 | `name` | VARCHAR(150) | Employee name |
-| `email` | VARCHAR(255) NULL UNIQUE | Login identifier when email is used |
-| `phone` | VARCHAR(30) NULL UNIQUE | Optional login/contact |
+| `email` | VARCHAR(255) UNIQUE NOT NULL | Current required login identifier |
 | `password` | VARCHAR(255) | Hashed by Laravel |
 | `is_active` | BOOLEAN | Default true |
 | `email_verified_at` | TIMESTAMP NULL | Laravel-compatible |
 | `remember_token` | VARCHAR(100) NULL | Laravel-compatible |
 | `created_at`, `updated_at` | TIMESTAMP | |
 
-Require at least one unique login identifier (email or phone) in application validation.
+The current login flow uses a required, unique email address as its login identifier. Phone-based login is not implemented.
 
 ### `roles`, `permissions`, `role_user`, `permission_role`
 
-- `roles`: `id`, `name` VARCHAR(80) UNIQUE, `display_name` VARCHAR(120), timestamps. Seed `customer`, `admin`, `manager`, `cashier`, and `staff`. Public registration may assign only `customer`; administrative roles must be provisioned securely by the backend.
-- `permissions`: `id`, `name` VARCHAR(120) UNIQUE, `display_name` VARCHAR(160), timestamps.
+- `roles`: `id`, `name` VARCHAR(80) UNIQUE, `display_name` VARCHAR(120), timestamps. Implemented roles are seeded as `customer`, `admin`, `manager`, `cashier`, and `staff`. Public registration assigns only `customer`; administrative roles must be provisioned securely by the backend.
+- `permissions`: `id`, `name` VARCHAR(120) UNIQUE, `display_name` VARCHAR(160), timestamps (planned; not yet migrated).
 - `role_user`: `role_id`, `user_id`, timestamps; composite primary key (`role_id`, `user_id`).
-- `permission_role`: `permission_id`, `role_id`; composite primary key (`permission_id`, `role_id`).
+- `permission_role`: `permission_id`, `role_id`; composite primary key (`permission_id`, `role_id`) (planned; not yet migrated).
 
-The role and permission pivots have cascading foreign keys. Do not store comma-separated roles or permissions on `users`.
+The implemented `role_user` pivot has cascading foreign keys. When permission tables are implemented, their pivots must also cascade. Do not store comma-separated roles or permissions on `users`.
 
 ## 4. Menu and product catalog
 

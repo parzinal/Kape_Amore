@@ -77,29 +77,24 @@
   gap: 9px;
 }
 
-.auth-form > label:not(.auth-check),
-.auth-label-row > label {
+.auth-form > label:not(.auth-check) {
   color: #45362c;
   font-size: 10px;
   font-weight: 600;
   margin-top: 6px;
 }
 
-.auth-label-row {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-  margin-top: 6px;
-}
-
-.auth-label-row > a {
+.auth-forgot-link {
+  align-self: flex-end;
   color: #8b4c28;
   font-size: 10px;
+  margin-top: -4px;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
-.auth-form > input {
+.auth-form > input,
+.auth-password-field > input {
   background: #fffdf8;
   border: 1px solid #d9c9b6;
   border-radius: 2px;
@@ -112,7 +107,50 @@
   width: 100%;
 }
 
-.auth-form > input:focus {
+.auth-password-field {
+  display: block;
+  position: relative;
+  width: 100%;
+}
+
+.auth-password-field > input {
+  padding-right: 44px;
+}
+
+.auth-password-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  color: #806b5a;
+  cursor: pointer;
+  display: flex;
+  height: 36px;
+  justify-content: center;
+  padding: 8px;
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+}
+
+.auth-password-toggle svg {
+  height: 18px;
+  width: 18px;
+}
+
+.auth-password-toggle:hover {
+  color: #5b2c17;
+}
+
+.auth-password-toggle:focus-visible {
+  outline: 2px solid #a85f34;
+  outline-offset: 1px;
+}
+
+.auth-form > input:focus,
+.auth-password-field > input:focus {
   border-color: #a85f34;
   box-shadow: 0 0 0 3px rgb(168 95 52 / 13%);
   outline: none;
@@ -625,19 +663,19 @@
   gap: 7px;
 }
 
-.auth-form > label:not(.auth-check),
-.auth-label-row > label {
+.auth-form > label:not(.auth-check) {
   color: #ded7ce;
   font-size: 9px;
   margin-top: 5px;
 }
 
-.auth-label-row > a {
+.auth-forgot-link {
   color: #caa47f;
   font-size: 8px;
 }
 
-.auth-form > input {
+.auth-form > input,
+.auth-password-field > input {
   background: #302e2c;
   border: 1px solid #3c3936;
   border-radius: 4px;
@@ -647,13 +685,27 @@
   padding: 9px 11px;
 }
 
-.auth-form > input:focus {
+.auth-form > input:focus,
+.auth-password-field > input:focus {
   border-color: #c98a53;
   box-shadow: 0 0 0 3px rgb(201 138 83 / 16%);
 }
 
-.auth-form > input::placeholder {
+.auth-form > input::placeholder,
+.auth-password-field > input::placeholder {
   color: #968b80;
+}
+
+.auth-password-toggle {
+  color: #c4b5a5;
+}
+
+.auth-password-toggle:hover {
+  color: #e2ad77;
+}
+
+.auth-password-toggle:focus-visible {
+  outline-color: #e2ad77;
 }
 
 .auth-check {
@@ -737,16 +789,27 @@
   background: #3b3027;
   color: #f0d8bc;
   font-size: 9px;
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.auth-notice-detail {
+  color: #d1c1b1;
+  overflow-wrap: anywhere;
 }
 
 .auth-notice button {
   color: #e0b385;
 }
 
+.auth-notice-detail {
+  flex-basis: 100%;
+}
+
 .auth-page .auth-back:focus-visible,
 .auth-page .auth-brand:focus-visible,
 .auth-page .auth-switch a:focus-visible,
-.auth-page .auth-label-row a:focus-visible {
+.auth-page .auth-forgot-link:focus-visible {
   outline-color: #e2ad77;
 }
 

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import {
-  AccountPage,
   AdminPage,
   ForgotPasswordPage,
   LoginPage,
@@ -10,6 +9,7 @@ import {
   ResetPasswordPage,
 } from "./auth/AuthPages";
 import { RequireAuth } from "./auth/RouteGuards";
+import { AccountDashboard } from "./dashboard/AccountDashboard";
 
 const drinks = [
   {
@@ -196,7 +196,7 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/account" element={<RequireAuth excludeRole="admin"><AccountPage /></RequireAuth>} />
+          <Route path="/account/*" element={<RequireAuth excludeRole="admin"><AccountDashboard /></RequireAuth>} />
           <Route path="/admin" element={<RequireAuth role="admin"><AdminPage /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
