@@ -101,6 +101,13 @@ class AdminWorkspaceController extends Controller
             ->groupByRaw('DATE(created_at)')
             ->orderBy('day')
             ->get();
+        $previousWeekStart = $weekStart->copy()->subDays(7);
+        $previousWeeklySales = DB::table('orders')
+            ->selectRaw('DATE(created_at) as day, SUM(CASE WHEN status = ? THEN total ELSE 0 END) as sales, SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as orders', ['completed', 'completed'])
+            ->whereBetween('created_at', [$previousWeekStart, $weekStart->copy()->subSecond()])
+            ->groupByRaw('DATE(created_at)')
+            ->orderBy('day')
+            ->get();
         $records = [
             'categories' => $this->rows('categories', true),
             'products' => $this->rows('products', true),
@@ -156,6 +163,7 @@ class AdminWorkspaceController extends Controller
                 'low_stock' => DB::table('ingredients')->whereNull('deleted_at')->whereColumn('quantity_on_hand', '<=', 'low_stock_threshold')->count(),
                 'orders_by_type' => DB::table('orders')->select('order_type', DB::raw('COUNT(*) as count'))->groupBy('order_type')->get(),
                 'weekly_sales' => $weeklySales,
+                'previous_weekly_sales' => $previousWeeklySales,
                 'recent_sales' => $orders->whereDate('created_at', $today)->latest()->limit(10)->get(),
             ],
             'records' => $records,
@@ -1113,7 +1121,14 @@ class AdminWorkspaceController extends Controller
             $request->merge(['base_price' => min(array_map(fn (array $size): float => (float) $size['price'], array_filter($sizes, fn (array $size): bool => ($size['is_available'] ?? true))))]);
         }
 
-        return $sizes;
+        return array_map(static function (array $size): array {
+            if (array_key_exists('sku', $size)) {
+                $sku = trim((string) $size['sku']);
+                $size['sku'] = $sku !== '' ? $sku : null;
+            }
+
+            return $size;
+        }, $sizes);
     }
 
     private function syncProductSizes(int $productId, array $sizes): void

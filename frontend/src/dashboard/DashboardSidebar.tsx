@@ -5,7 +5,7 @@ import { tw } from "../tw";
 export type DashboardNavItem = {
   label: string;
   to: string;
-  icon: "overview" | "orders" | "rewards" | "profile" | "menu" | "tables" | "inventory" | "delivery" | "customers" | "team" | "reports" | "settings";
+  icon: "overview" | "orders" | "rewards" | "profile" | "menu" | "tables" | "delivery" | "customers" | "team" | "reports" | "settings";
 };
 
 type DashboardSidebarProps = {
@@ -15,6 +15,7 @@ type DashboardSidebarProps = {
   sectionLabel?: string;
   userSubtitle?: string;
   showMenuCallout?: boolean;
+  showSidebarUser?: boolean;
 };
 
 const iconPaths: Record<DashboardNavItem["icon"], string> = {
@@ -24,7 +25,6 @@ const iconPaths: Record<DashboardNavItem["icon"], string> = {
   profile: "M20 21a8 8 0 00-16 0M12 12a4 4 0 100-8 4 4 0 000 8z",
   menu: "M4 6h16M4 12h16M4 18h16",
   tables: "M3 9h18v9H3zM6 9V6h12v3M6 18v2M18 18v2",
-  inventory: "M4 7l8-4 8 4-8 4zM4 7v10l8 4 8-4V7M12 11v10",
   delivery: "M3 6h11v11H3zM14 10h4l3 3v4h-7zM7 20a2 2 0 100-4 2 2 0 000 4zM18 20a2 2 0 100-4 2 2 0 000 4z",
   customers: "M16 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M10 11a4 4 0 100-8 4 4 0 000 8zM20 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8",
   team: "M16 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M10 11a4 4 0 100-8 4 4 0 000 8zM18 8v6M21 11h-6",
@@ -39,6 +39,7 @@ export function DashboardSidebar({
   sectionLabel = "YOUR SPACE",
   userSubtitle = "Customer account",
   showMenuCallout = true,
+  showSidebarUser = true,
 }: DashboardSidebarProps) {
   const initials = user.name
     .trim()
@@ -78,18 +79,20 @@ export function DashboardSidebar({
         </Link>
       )}
 
-      <div className={tw("dashboard-sidebar-user")}>
-        <span className={tw("dashboard-avatar")} aria-hidden="true">{initials || "KA"}</span>
-        <span className={tw("dashboard-user-copy")}>
-          <strong className={tw("dashboard-user-name")}>{user.name}</strong>
-          <span className={tw("dashboard-user-subtitle")}>{userSubtitle}</span>
-        </span>
-        <button aria-label="Sign out" className={tw("dashboard-signout-icon")} onClick={onSignOut} title="Sign out" type="button">
-          <svg className={tw("dashboard-signout-svg")} aria-hidden="true" fill="none" viewBox="0 0 24 24">
-            <path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
-          </svg>
-        </button>
-      </div>
+      {showSidebarUser && (
+        <div className={tw("dashboard-sidebar-user")}>
+          <span className={tw("dashboard-avatar")} aria-hidden="true">{initials || "KA"}</span>
+          <span className={tw("dashboard-user-copy")}>
+            <strong className={tw("dashboard-user-name")}>{user.name}</strong>
+            <span className={tw("dashboard-user-subtitle")}>{userSubtitle}</span>
+          </span>
+          <button aria-label="Sign out" className={tw("dashboard-signout-icon")} onClick={onSignOut} title="Sign out" type="button">
+            <svg className={tw("dashboard-signout-svg")} aria-hidden="true" fill="none" viewBox="0 0 24 24">
+              <path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+            </svg>
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

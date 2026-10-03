@@ -163,6 +163,7 @@ function ResourcePanel({
   const [form, setForm] = useState<Record<string, string | boolean>>(() => defaultForm(config.fields));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [productImage, setProductImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [priceMode, setPriceMode] = useState<"single" | "size">("single");
@@ -178,6 +179,12 @@ function ResourcePanel({
     setImagePreview(preview);
     return () => URL.revokeObjectURL(preview);
   }, [productImage]);
+
+  useEffect(() => {
+    if (!success) return;
+    const timeout = window.setTimeout(() => setSuccess(null), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [success]);
 
   function beginEdit(record: AdminRecord) {
     setEditing(record);
@@ -209,11 +216,13 @@ function ResourcePanel({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setSuccess(null);
     if (config.resource === "products" && priceMode === "size" && !productSizes.some((size) => size.is_available && size.name.trim() && size.price !== "")) {
       setError("Add at least one available size and enter its price.");
       return;
     }
     setBusy(true);
+    const addingProduct = config.resource === "products" && editing === null;
     const payload: Record<string, unknown> = {};
     for (const field of config.fields) {
       if (field.type === "image") continue;
@@ -259,6 +268,7 @@ function ResourcePanel({
       }
       await onRefresh();
       cancelEdit();
+      if (addingProduct) setSuccess("Product added successfully.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to save this record.");
     } finally {
@@ -279,6 +289,11 @@ function ResourcePanel({
 
   return (
     <section className={tw("dashboard-panel admin-resource-panel")} aria-label={config.title}>
+      {success && <div className={tw("admin-success-toast")} role="status">
+        <span aria-hidden="true">✓</span>
+        <strong>{success}</strong>
+        <button aria-label="Dismiss success message" onClick={() => setSuccess(null)} type="button">×</button>
+      </div>}
       <div className={tw("dashboard-panel-heading")}>
         <div>
           <p className={tw("dashboard-section-kicker")}>MANAGE RECORDS</p>
@@ -344,7 +359,13 @@ function ResourcePanel({
                   <div><strong>Size prices</strong><span>Each size gets its own price.</span></div>
                   {productSizes.map((size, index) => (
                     <div className={tw("admin-product-size-row")} key={size.id ?? `new-${index}`}>
-                      <label><span>Size name</span><input onChange={(event) => setProductSizes((current) => current.map((item, row) => row === index ? { ...item, name: event.target.value } : item))} required value={size.name} /></label>
+                      <label><span>Size name</span><select onChange={(event) => setProductSizes((current) => current.map((item, row) => row === index ? { ...item, name: event.target.value } : item))} required value={size.name}>
+                        <option value="">Select size</option>
+                        {!["Small", "Medium", "Large"].includes(size.name) && size.name && <option value={size.name}>{size.name}</option>}
+                        <option value="Small">Small</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Large">Large</option>
+                      </select></label>
                       <label><span>Price (₱)</span><input min="0" onChange={(event) => setProductSizes((current) => current.map((item, row) => row === index ? { ...item, price: event.target.value } : item))} required type="number" value={size.price} /></label>
                       <label className={tw("admin-field-checkbox")}><input checked={size.is_available} onChange={(event) => setProductSizes((current) => current.map((item, row) => row === index ? { ...item, is_available: event.target.checked } : item))} type="checkbox" /><span>Available</span></label>
                       <button aria-label={`Remove ${size.name || "size"}`} className={tw("admin-text-button admin-delete-button")} onClick={() => setProductSizes((current) => current.filter((_, row) => row !== index))} type="button">Remove</button>
@@ -447,9 +468,7 @@ function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }:
   const [itemQuantities, setItemQuantities] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [paymentOrder, setPaymentOrder] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
-  const [paymentAmount, setPaymentAmount] = useState("");
   const [tendered, setTendered] = useState("");
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -459,7 +478,6 @@ function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }:
   const products = workspace.records.products ?? [];
   const variations = workspace.records.variations ?? [];
   const orders = workspace.records.orders ?? [];
-  const payments = workspace.records.payments ?? [];
   const customers = workspace.records.customers ?? [];
   const addresses = workspace.records.addresses ?? [];
   const discounts = workspace.records.discounts ?? [];
@@ -576,29 +594,6 @@ function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }:
       await onRefresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to create the order.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function pay(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    const order = orders.find((record) => record.id === Number(paymentOrder));
-    const paid = payments.filter((record) => record.order_id === Number(paymentOrder) && record.status === "completed").reduce((sum, record) => sum + Number(record.amount), 0);
-    const remaining = order ? Math.max(0, Number(order.total) - paid) : 0;
-    try {
-      await adminApi.pay(Number(paymentOrder), {
-        method: paymentMethod,
-        amount: paymentAmount ? Number(paymentAmount) : remaining,
-        tendered_amount: paymentMethod === "cash" ? Number(tendered || paymentAmount || remaining) : undefined,
-      });
-      setPaymentAmount("");
-      setTendered("");
-      await onRefresh();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to record payment.");
     } finally {
       setBusy(false);
     }
@@ -767,31 +762,20 @@ function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }:
           </div>}
           {pendingCheckoutOrder && <p className={tw("admin-pos-pending-note")} role="status">Order created but payment is not confirmed yet. Correct the payment details and retry; this will not create a duplicate order.</p>}
           {error && <p className={tw("admin-form-error")} role="alert">{error}</p>}
-          <button className={tw("admin-pos-checkout")} disabled={busy || !lines.some((line) => line.product_id) || (orderType === "dine_in" && tableIds.length === 0)} type="submit"><span>▣</span>{busy ? "Processing…" : pendingCheckoutOrder ? "Retry Payment" : workspace.records.payments !== undefined ? "Process Transaction" : "Create Order"}</button>
+          <button className={tw("admin-pos-checkout")} disabled={busy || !lines.some((line) => line.product_id)} type="submit"><span>▣</span>{busy ? "Processing…" : pendingCheckoutOrder ? "Retry Payment" : workspace.records.payments !== undefined ? "Process Transaction" : "Create Order"}</button>
         </aside>
       </form>}
-
-      {!showOrderCreator && <section className={tw("dashboard-panel admin-resource-panel")} aria-label="Record order payment">
-        <div className={tw("dashboard-panel-heading")}><div><p className={tw("dashboard-section-kicker")}>CHECKOUT</p><h2 className={tw("dashboard-panel-title")}>Record a payment</h2></div></div>
-        <form className={tw("admin-record-form")} onSubmit={(event) => void pay(event)}>
-          <label className={tw("admin-field")}><span>Open order</span><select onChange={(event) => setPaymentOrder(event.target.value)} required value={paymentOrder}><option value="">Select order…</option>{orders.filter((order) => !["completed", "cancelled"].includes(String(order.status))).map((order) => <option key={order.id} value={order.id}>{String(order.order_number)} · due ₱{Math.max(0, Number(order.total) - payments.filter((payment) => payment.order_id === order.id && payment.status === "completed").reduce((sum, payment) => sum + Number(payment.amount), 0)).toFixed(2)}</option>)}</select></label>
-          <label className={tw("admin-field")}><span>Method</span><select onChange={(event) => setPaymentMethod(event.target.value)} value={paymentMethod}>{["cash", "card", "e_wallet", "bank_transfer", "other"].map((value) => <option key={value} value={value}>{value.replace(/_/g, " ")}</option>)}</select></label>
-          <label className={tw("admin-field")}><span>Amount applied (blank pays remaining balance)</span><input min="0.01" onChange={(event) => setPaymentAmount(event.target.value)} step="0.01" type="number" value={paymentAmount} /></label>
-          {paymentMethod === "cash" && <label className={tw("admin-field")}><span>Cash received</span><input min="0" onChange={(event) => setTendered(event.target.value)} step="0.01" type="number" value={tendered} /></label>}
-          <div className={tw("admin-form-actions")}><button className={tw("admin-primary-button")} disabled={busy || !paymentOrder} type="submit">Record payment</button></div>
-        </form>
-      </section>}
 
       {error && <p className={tw("admin-form-error")} role="alert">{error}</p>}
       {showOrders && <section className={tw("dashboard-panel admin-resource-panel")} aria-label="Orders">
         <div className={tw("dashboard-panel-heading")}><div><p className={tw("dashboard-section-kicker")}>ORDER HISTORY</p><h2 className={tw("dashboard-panel-title")}>Orders</h2></div><span className={tw("admin-count")}>{orders.length}</span></div>
-        <div className={tw("admin-table-wrap")}><table className={tw("admin-table")}><thead><tr>{["order_number", "order_type", "status", "subtotal", "discount_total", "total", "created_at"].map((column) => <th key={column}>{column.replace(/_/g, " ")}</th>)}<th>Items</th><th>Tables</th><th>Workflow</th></tr></thead>
+        <div className={tw("admin-table-wrap")}><table className={tw("admin-table")}><thead><tr>{["order_number", "order_type", "status", "subtotal", "discount_total", "total", "created_at"].map((column) => <th key={column}>{column.replace(/_/g, " ")}</th>)}<th>Items</th>{showOrderCreator && <><th>Tables</th><th>Workflow</th></>}</tr></thead>
           <tbody>{orders.map((order) => <tr key={order.id}>
             <td>{String(order.order_number)}</td><td>{String(order.order_type).replace(/_/g, " ")}</td><td>{String(order.status)}</td><td>₱{Number(order.subtotal).toFixed(2)}</td><td>₱{Number(order.discount_total).toFixed(2)}</td><td>₱{Number(order.total).toFixed(2)}</td><td>{String(order.created_at).slice(0, 16)}</td>
-            <td><details><summary>{orderItems.filter((item) => item.order_id === order.id).length} items</summary>{orderItems.filter((item) => item.order_id === order.id).map((item) => <div className={tw("admin-order-item-edit")} key={item.id}><span>{String(item.product_name)}</span><input aria-label={`Quantity for ${String(item.product_name)}`} className={tw("admin-input")} min="0.001" onChange={(event) => setItemQuantities((current) => ({ ...current, [item.id]: event.target.value }))} step="0.001" type="number" value={itemQuantities[item.id] ?? String(item.quantity)} /><button className={tw("admin-text-button")} disabled={busy || !["draft", "held"].includes(String(order.status))} onClick={() => void changeItemQuantity(item.id)} type="button">Save</button></div>)}</details></td>
-            <td>{order.order_type === "dine_in" && !["completed", "cancelled"].includes(String(order.status)) ? <div className={tw("admin-table-assignment")}><select aria-label={`Tables for ${String(order.order_number)}`} className={tw("admin-input")} multiple onChange={(event) => setOrderTables((current) => ({ ...current, [order.id]: Array.from(event.target.selectedOptions, (option) => option.value) }))} value={orderTables[order.id] ?? tableAssignments.filter((assignment) => assignment.order_id === order.id && !assignment.released_at).map((assignment) => String(assignment.dining_table_id))}>{tables.filter((table) => table.status === "available" || tableAssignments.some((assignment) => assignment.order_id === order.id && assignment.dining_table_id === table.id && !assignment.released_at)).map((table) => <option key={table.id} value={table.id}>{String(table.name)}</option>)}</select><button className={tw("admin-text-button")} disabled={busy} onClick={() => void changeTables(order)} type="button">Save tables</button></div> : "—"}</td>
-            <td><button className={tw("admin-text-button")} onClick={() => printReceipt(order)} type="button">Receipt</button>{order.status === "draft" && <button className={tw("admin-text-button")} disabled={busy} onClick={() => void changeStatus(order, "held")} type="button">Hold</button>}{order.status === "held" && <button className={tw("admin-text-button")} disabled={busy} onClick={() => void changeStatus(order, "draft")} type="button">Resume</button>}{nextStatuses[String(order.status)] && <button className={tw("admin-text-button")} disabled={busy} onClick={() => void changeStatus(order, nextStatuses[String(order.status)])} type="button">Mark {nextStatuses[String(order.status)]}</button>}{order.status !== "completed" && order.status !== "cancelled" && <button className={tw("admin-text-button admin-delete-button")} disabled={busy} onClick={() => void changeStatus(order, "cancelled")} type="button">Cancel</button>}</td>
-          </tr>)}{orders.length === 0 && <tr><td className={tw("admin-table-empty")} colSpan={10}>No orders yet. Create one above to start a sale.</td></tr>}</tbody></table></div>
+            <td><details><summary>{orderItems.filter((item) => item.order_id === order.id).length} items</summary>{orderItems.filter((item) => item.order_id === order.id).map((item) => <div className={tw("admin-order-item-edit")} key={item.id}><span>{String(item.product_name)}</span>{showOrderCreator && <><input aria-label={`Quantity for ${String(item.product_name)}`} className={tw("admin-input")} min="0.001" onChange={(event) => setItemQuantities((current) => ({ ...current, [item.id]: event.target.value }))} step="0.001" type="number" value={itemQuantities[item.id] ?? String(item.quantity)} /><button className={tw("admin-text-button")} disabled={busy || !["draft", "held"].includes(String(order.status))} onClick={() => void changeItemQuantity(item.id)} type="button">Save</button></>}</div>)}</details></td>
+            {showOrderCreator && <><td>{order.order_type === "dine_in" && !["completed", "cancelled"].includes(String(order.status)) ? <div className={tw("admin-table-assignment")}><select aria-label={`Tables for ${String(order.order_number)}`} className={tw("admin-input")} multiple onChange={(event) => setOrderTables((current) => ({ ...current, [order.id]: Array.from(event.target.selectedOptions, (option) => option.value) }))} value={orderTables[order.id] ?? tableAssignments.filter((assignment) => assignment.order_id === order.id && !assignment.released_at).map((assignment) => String(assignment.dining_table_id))}>{tables.filter((table) => table.status === "available" || tableAssignments.some((assignment) => assignment.order_id === order.id && assignment.dining_table_id === table.id && !assignment.released_at)).map((table) => <option key={table.id} value={table.id}>{String(table.name)}</option>)}</select><button className={tw("admin-text-button")} disabled={busy} onClick={() => void changeTables(order)} type="button">Save tables</button></div> : "—"}</td>
+              <td><button className={tw("admin-text-button")} onClick={() => printReceipt(order)} type="button">Receipt</button>{order.status === "draft" && <button className={tw("admin-text-button")} disabled={busy} onClick={() => void changeStatus(order, "held")} type="button">Hold</button>}{order.status === "held" && <button className={tw("admin-text-button")} disabled={busy} onClick={() => void changeStatus(order, "draft")} type="button">Resume</button>}{nextStatuses[String(order.status)] && <button className={tw("admin-text-button")} disabled={busy} onClick={() => void changeStatus(order, nextStatuses[String(order.status)])} type="button">Mark {nextStatuses[String(order.status)]}</button>}{order.status !== "completed" && order.status !== "cancelled" && <button className={tw("admin-text-button admin-delete-button")} disabled={busy} onClick={() => void changeStatus(order, "cancelled")} type="button">Cancel</button>}</td></>}
+          </tr>)}{orders.length === 0 && <tr><td className={tw("admin-table-empty")} colSpan={showOrderCreator ? 10 : 8}>No orders yet. Create one above to start a sale.</td></tr>}</tbody></table></div>
       </section>}
 
       <ResourcePanel config={{ title: "Payments", resource: "payments", fields: [], columns: ["order_id", "method", "status", "amount", "tendered_amount", "change_amount", "reference_number", "paid_at"], readOnly: true }} onRefresh={onRefresh} workspace={workspace} />
@@ -854,8 +838,8 @@ export function AdminFeaturePanel({
   workspace: AdminWorkspace;
   onRefresh: () => Promise<void>;
 }) {
-  if (section === "sales") return <OrderManagement onRefresh={onRefresh} showOrderCreator showOrders workspace={workspace} />;
-  if (section === "payments") return <OrderManagement onRefresh={onRefresh} showOrderCreator={false} showOrders={false} workspace={workspace} />;
+  if (section === "sales") return <OrderManagement onRefresh={onRefresh} showOrderCreator showOrders={false} workspace={workspace} />;
+  if (section === "payments") return <OrderManagement onRefresh={onRefresh} showOrderCreator={false} showOrders workspace={workspace} />;
   if (section === "menu") return <MenuCatalog onRefresh={onRefresh} workspace={workspace} />;
   const configs = resourceConfigs[section] ?? [];
   if (configs.length === 0) return null;

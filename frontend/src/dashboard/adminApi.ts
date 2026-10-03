@@ -10,6 +10,7 @@ export type AdminWorkspace = {
     low_stock: number;
     orders_by_type: Array<{ order_type: string; count: number }>;
     weekly_sales: Array<{ day: string; sales: number; orders: number }>;
+    previous_weekly_sales: Array<{ day: string; sales: number; orders: number }>;
     recent_sales: AdminRecord[];
   };
   records: Record<string, AdminRecord[]>;

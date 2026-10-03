@@ -152,19 +152,21 @@ class AdminWorkspaceTest extends TestCase
         $category = $this->postJson('/api/admin/records/categories', ['name' => 'Coffee'])
             ->assertCreated()
             ->json('record');
-        $product = $this->postJson('/api/admin/records/products', [
+        $product = $this->post('/api/admin/records/products', [
             'category_id' => $category['id'],
             'name' => 'Cappuccino',
             'pricing_mode' => 'size',
-            'sizes' => [
-                ['name' => 'Small', 'price' => 125],
-                ['name' => 'Large', 'price' => 180],
-            ],
-        ])->assertCreated()->json('record');
+            'sizes' => json_encode([
+                ['name' => 'Small', 'sku' => '', 'price' => 125],
+                ['name' => 'Large', 'sku' => '', 'price' => 180],
+            ], JSON_THROW_ON_ERROR),
+        ], ['Accept' => 'application/json'])->assertCreated()->json('record');
 
         $this->assertEquals(125.0, (float) $product['base_price']);
         $sizes = DB::table('product_variations')->where('product_id', $product['id'])->orderBy('price')->get();
         $this->assertCount(2, $sizes);
+        $this->assertNull($sizes[0]->sku);
+        $this->assertNull($sizes[1]->sku);
 
         $this->postJson('/api/admin/records/orders', [
             'order_type' => 'takeout',
