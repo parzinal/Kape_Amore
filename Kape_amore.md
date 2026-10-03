@@ -6,7 +6,7 @@ A coffee shop Point-of-Sale (POS) system built for dine-in, takeout, and deliver
 
 * **Backend:** Laravel
 * **Frontend:** React.js
-* **Styling:** Tailwind CSS
+* **Styling:** Tailwind CSS 4 through the `@tailwindcss/vite` Vite plugin
 * **Database:** MySQL
 * **API:** Laravel REST API
 * **Authentication:** Laravel Sanctum
@@ -262,6 +262,8 @@ See [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) for the proposed MySQL tables, co
 
 The React frontend includes a responsive customer-facing café homepage in `frontend/`, using the supplied logo at `frontend/public/images/kape-amore-logo.png` and a matching espresso-brown, cream, and caramel palette. It features a split-photo hero, prominent menu calls to action, three featured product cards, and café story/visit sections. Featured items, prices, and photography are presentation examples until connected to the catalog and confirmed shop data. The current "Order now" call to action navigates to the featured menu; online checkout is not implemented yet.
 
+Tailwind CSS 4 is integrated through Vite's `@tailwindcss/vite` plugin. The shared theme defines the café palette and DM Sans font, and the landing, authentication, and account dashboard interfaces use Tailwind utility classes. Global base styles and bespoke CSS are limited to shared browser defaults, complex photo backgrounds, and the hero overlay.
+
 ## Authentication
 
-The frontend contains login, customer registration, forgot/reset-password forms, and role-aware account/admin routes. The Laravel 13 backend now implements Sanctum cookie-based authentication, customer-only public registration, password reset, role persistence, rate limiting, and an admin-only API example. See [AUTHENTICATION.md](./AUTHENTICATION.md) for local setup and security requirements; the remaining POS API and database tables are not implemented yet.
+The frontend contains login, customer registration, forgot/reset-password forms, and role- and permission-aware account/admin routes. The admin workspace reuses the dashboard sidebar and connects its POS and sales, menu/catalog, tables, payments, inventory, delivery, customers, team/access, reports, and settings sections to Laravel APIs and MySQL records. Orders and payment totals are calculated server-side; stock changes are ledgered, refunds are capped at the unrefunded balance, and assigned role permissions are enforced by the API. Card and e-wallet entries are recorded but are not charged through a payment provider. See [AUTHENTICATION.md](./AUTHENTICATION.md) for local setup and access-control details and [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) for the implemented business schema.

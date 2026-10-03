@@ -152,6 +152,7 @@ class AuthController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'roles' => $user->roles->pluck('name')->values(),
+                'permissions' => $user->roles()->with('permissions')->get()->flatMap(fn (Role $role) => $role->permissions->pluck('name'))->unique()->values(),
             ],
         ], $status);
     }

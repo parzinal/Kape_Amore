@@ -3,6 +3,7 @@ export type AuthUser = {
   name: string;
   email: string;
   roles: string[];
+  permissions: string[];
 };
 
 type AuthResponse = {
@@ -72,7 +73,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 function withUser(payload: AuthResponse): AuthUser {
-  if (!payload?.user || !Array.isArray(payload.user.roles)) {
+  if (!payload?.user || !Array.isArray(payload.user.roles) || !Array.isArray(payload.user.permissions)) {
     throw new Error("The server returned an invalid account response.");
   }
   return payload.user;

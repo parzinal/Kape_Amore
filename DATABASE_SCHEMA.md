@@ -2,7 +2,7 @@
 
 ## 1. Purpose and conventions
 
-This document describes the MySQL 8 schema for the Kape Amore Laravel REST API and React POS. The Laravel authentication tables (`users`, `password_reset_tokens`, `sessions`, `roles`, and `role_user`) are implemented as migrations in `backend/database/migrations`; the remaining POS tables are a design reference and are not yet migrations.
+This document describes the MySQL 8 schema for the Kape Amore Laravel REST API and React POS. The authentication and business tables described below are implemented as migrations in `backend/database/migrations`.
 
 - Use InnoDB and `utf8mb4`.
 - Use Laravel `BIGINT UNSIGNED` auto-increment primary keys (`id`) and matching foreign keys.
@@ -57,11 +57,11 @@ The current login flow uses a required, unique email address as its login identi
 ### `roles`, `permissions`, `role_user`, `permission_role`
 
 - `roles`: `id`, `name` VARCHAR(80) UNIQUE, `display_name` VARCHAR(120), timestamps. Implemented roles are seeded as `customer`, `admin`, `manager`, `cashier`, and `staff`. Public registration assigns only `customer`; administrative roles must be provisioned securely by the backend.
-- `permissions`: `id`, `name` VARCHAR(120) UNIQUE, `display_name` VARCHAR(160), timestamps (planned; not yet migrated).
+- `permissions`: `id`, `name` VARCHAR(120) UNIQUE, `display_name` VARCHAR(160), timestamps.
 - `role_user`: `role_id`, `user_id`, timestamps; composite primary key (`role_id`, `user_id`).
-- `permission_role`: `permission_id`, `role_id`; composite primary key (`permission_id`, `role_id`) (planned; not yet migrated).
+- `permission_role`: `permission_id`, `role_id`; composite primary key (`permission_id`, `role_id`).
 
-The implemented `role_user` pivot has cascading foreign keys. When permission tables are implemented, their pivots must also cascade. Do not store comma-separated roles or permissions on `users`.
+Both role pivots have cascading foreign keys. The API returns effective permission names with the authenticated user; backend endpoints enforce permissions independently of frontend navigation. Administrators are superusers. The default manager role has operational permissions but not `admin.manage`, which controls staff, permissions, and settings. Do not store comma-separated roles or permissions on `users`.
 
 ## 4. Menu and product catalog
 
@@ -78,6 +78,8 @@ The implemented `role_user` pivot has cascading foreign keys. When permission ta
 `id`; `product_id` FK (CASCADE); `name` VARCHAR(100) (e.g. size); `sku` VARCHAR(80) NULL; `price` DECIMAL(12,2); `is_available` BOOLEAN DEFAULT true; `sort_order` SMALLINT UNSIGNED DEFAULT 0; timestamps. Add unique (`product_id`, `name`) and optional unique (`sku`).
 
 Represent an un-sized product with no variation rows. An order item may have a null `product_variation_id` for that case.
+
+In the admin product form, single-price products (such as food) use `base_price`, while size-priced products (such as drinks) define their size names and prices inline. For size-priced products, `base_price` stores the lowest available size price for POS listing and backward compatibility; checkout requires a selected size. Removed sizes are marked unavailable rather than deleted so historical recipe/variation links are preserved.
 
 ### `modifier_groups`, `modifier_options`, `product_modifier_group`
 

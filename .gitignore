@@ -15,6 +15,7 @@
 /backend/database/*.sqlite
 
 # Frontend dependencies and generated builds
+/node_modules/
 /frontend/node_modules/
 /frontend/dist/
 /frontend/.vite/

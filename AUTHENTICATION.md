@@ -13,7 +13,9 @@ The Laravel 13 API in `backend/` now provides the cookie-based authentication co
 | POST | `/reset-password` | Apply a valid, unexpired reset token |
 | POST | `/logout` | Invalidate the current session and CSRF token |
 | GET | `/api/user` | Return the authenticated user's minimal identity or 401 |
-| GET | `/api/admin/me` | Example admin-only endpoint, protected on the server |
+| GET | `/api/admin/me` | Admin-only identity endpoint, protected on the server |
+| GET | `/api/admin/workspace` | Permission-filtered admin workspace and business records |
+| GET | `/api/admin/reports` | Date-range reports; requires `reports.view` or administrator role |
 
 Login, registration, and current-user responses use this shape:
 
@@ -23,7 +25,8 @@ Login, registration, and current-user responses use this shape:
     "id": 42,
     "name": "Example Customer",
     "email": "customer@example.com",
-    "roles": ["customer"]
+    "roles": ["customer"],
+    "permissions": []
   }
 }
 ```
@@ -55,7 +58,7 @@ npm install
 npm run dev
 ```
 
-The frontend's `.env.example` points to `http://127.0.0.1:8000`. The backend allows Vite on ports 5173 and 5174 for local development. If Vite selects a different port, update `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, and `SANCTUM_STATEFUL_DOMAINS` in the untracked `backend/.env`; also update `VITE_API_URL` if the API origin changes.
+The frontend's `.env.example` points to `http://127.0.0.1:8000`. The backend allows Vite on ports 5173 and 5174 for local development. If Vite selects a different port, update `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, and `SANCTUM_STATEFUL_DOMAINS` in the untracked `backend/.env`; also update `VITE_API_URL` if the API origin changes. The Laravel root URL (`http://127.0.0.1:8000/`) redirects to `FRONTEND_URL`, where the React landing page is served; the default is `http://127.0.0.1:5173`.
 
 For local password-reset testing, `MAIL_MAILER=log` writes the generated link to `backend/storage/logs/laravel.log`. Configure a real mail transport before using password resets outside local development.
 
@@ -66,11 +69,13 @@ cd backend
 php artisan test
 ```
 
+Admin workspace mutations are protected by the relevant permission (`pos.use`, `catalog.manage`, `tables.manage`, `payments.manage`, `inventory.manage`, `delivery.manage`, `customers.manage`, `reports.view`, or `admin.manage`). Administrators bypass individual permission checks. The default manager receives operational permissions except `admin.manage`; cashier and staff access is narrower. Role permission changes require `admin.manage`. The React sidebar hides unavailable sections, but API authorization remains the security boundary.
+
 ## Security and deployment requirements
 
 - Sanctum stateful SPA middleware, CSRF protection, credentialed CORS, and role middleware are configured. Keep allowed origins explicit; never use wildcard origins with credentials.
 - Use HTTPS in production and set `SESSION_SECURE_COOKIE=true`. Keep session cookies HttpOnly and SameSite=Lax, and configure the production frontend/API domains in `SANCTUM_STATEFUL_DOMAINS`, `CORS_ALLOWED_ORIGINS`, and `FRONTEND_URL`.
 - Public registration must remain customer-only. Provision administrators through a controlled, authenticated administrative process; do not add a public admin-registration path or ship a default admin password.
-- Protect every future admin API route with `auth:sanctum` and `role:admin`. A frontend route guard is not an authorization boundary.
+- Protect admin API routes with `auth:sanctum` and enforce the required permission in the controller; keep the frontend route guard as navigation only, never as an authorization boundary.
 - Return only minimal identity and role names; never expose password hashes, reset tokens, or session secrets.
 - Configure a production mail provider and verify reset-link expiry, CSRF rejection, rate limits, inactive-account denial, and authorization at the API boundary before launch.

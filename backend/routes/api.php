@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Api\AdminWorkspaceController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -19,4 +20,16 @@ Route::middleware(['auth:sanctum', 'role:admin'])->get('/admin/me', function (Re
             'roles' => $user->roles->pluck('name')->values(),
         ],
     ]);
+});
+
+Route::prefix('/admin')->middleware('auth:sanctum')->group(function (): void {
+    Route::get('/workspace', [AdminWorkspaceController::class, 'index']);
+    Route::get('/reports', [AdminWorkspaceController::class, 'report']);
+    Route::post('/products/{product}/modifier-groups', [AdminWorkspaceController::class, 'assignModifierGroups']);
+    Route::post('/orders/{order}/payments', [AdminWorkspaceController::class, 'payOrder']);
+    Route::post('/orders/{order}/tables', [AdminWorkspaceController::class, 'assignOrderTables']);
+    Route::post('/roles/{role}/permissions', [AdminWorkspaceController::class, 'assignRolePermissions']);
+    Route::post('/records/{resource}', [AdminWorkspaceController::class, 'createRecord']);
+    Route::patch('/records/{resource}/{id}', [AdminWorkspaceController::class, 'updateRecord'])->whereNumber('id');
+    Route::delete('/records/{resource}/{id}', [AdminWorkspaceController::class, 'deleteRecord'])->whereNumber('id');
 });

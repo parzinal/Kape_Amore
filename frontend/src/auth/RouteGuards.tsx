@@ -1,21 +1,22 @@
 import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthContext";
+import { tw } from "../tw";
 
-export function RequireAuth({ children, role, excludeRole }: { children: ReactNode; role?: string; excludeRole?: string }) {
+export function RequireAuth({ children, role, permission, excludeRole }: { children: ReactNode; role?: string | string[]; permission?: string; excludeRole?: string }) {
   const { user, status, error, refresh } = useAuth();
   const location = useLocation();
 
   if (status === "loading") {
-    return <main className="route-state" role="status">Checking your account…</main>;
+    return <main className={tw("route-state")} role="status">Checking your account…</main>;
   }
 
   if (status === "error") {
     return (
-      <main className="route-state" role="alert">
+      <main className={tw("route-state")} role="alert">
         <p>We couldn’t verify your sign-in, so this page stays locked.</p>
         <p>{error}</p>
-        <button className="auth-submit" onClick={() => void refresh()} type="button">Try again</button>
+        <button className={tw("auth-submit")} onClick={() => void refresh()} type="button">Try again</button>
       </main>
     );
   }
@@ -24,7 +25,12 @@ export function RequireAuth({ children, role, excludeRole }: { children: ReactNo
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
-  if (role && !user.roles.includes(role)) {
+  const hasAllowedRole = role && (Array.isArray(role) ? role.some((allowedRole) => user.roles.includes(allowedRole)) : user.roles.includes(role));
+  const isAdmin = user.roles.includes("admin");
+  if (permission && !isAdmin && !user.permissions.includes(permission)) {
+    return <Navigate to="/account" replace />;
+  }
+  if (!permission && role && !hasAllowedRole && !isAdmin) {
     return <Navigate to="/account" replace />;
   }
 

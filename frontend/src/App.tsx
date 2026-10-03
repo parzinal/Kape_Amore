@@ -1,14 +1,15 @@
 import { useState } from "react";
+import { tw } from "./tw";
 import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import {
-  AdminPage,
   ForgotPasswordPage,
   LoginPage,
   RegisterPage,
   ResetPasswordPage,
 } from "./auth/AuthPages";
 import { RequireAuth } from "./auth/RouteGuards";
+import { AdminDashboard } from "./dashboard/AdminDashboard";
 import { AccountDashboard } from "./dashboard/AccountDashboard";
 
 const drinks = [
@@ -48,139 +49,139 @@ function LandingPage() {
 
   return (
     <main>
-      <header className="site-header">
-        <a className="wordmark" href="#home" aria-label="Kape Amore home" onClick={closeMenu}>
-          <img className="brand-logo" src="/images/kape-amore-logo.png" alt="" />
-          <span className="wordmark-name"><span>KAPE <em>AMORE</em></span><small>COFFEE · FOOD · GOOD VIBES</small></span>
+      <header className={tw("site-header")}>
+        <a className={tw("wordmark")} href="#home" aria-label="Kape Amore home" onClick={closeMenu}>
+          <img className={tw("brand-logo")} src="/images/kape-amore-logo.png" alt="" />
+          <span className={tw("wordmark-name")}><span>KAPE <em className={tw("wordmark-name-em")}>AMORE</em></span><small className={tw("wordmark-name-small")}>COFFEE · FOOD · GOOD VIBES</small></span>
         </a>
 
         <button
-          className={`menu-toggle${menuOpen ? " is-open" : ""}`}
+          className={tw(`menu-toggle ${menuOpen ? "is-open" : ""}`)}
           type="button"
           aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
           aria-expanded={menuOpen}
           onClick={() => setMenuOpen(!menuOpen)}
         >
-          <span />
-          <span />
+          <span className={tw(`menu-toggle-line ${menuOpen ? "menu-toggle-open-first" : ""}`)} />
+          <span className={tw(`menu-toggle-line ${menuOpen ? "menu-toggle-open-last" : ""}`)} />
         </button>
 
-        <nav className={`main-nav${menuOpen ? " is-open" : ""}`} aria-label="Main navigation">
-          <a href="#home" onClick={closeMenu}>Home</a>
-          <a href="#menu" onClick={closeMenu}>The menu</a>
-          <a href="#story" onClick={closeMenu}>Our story</a>
-          <a href="#visit" onClick={closeMenu}>Visit</a>
-          <Link className="nav-account-link" to="/login" onClick={closeMenu}>Sign in</Link>
-          <a className="nav-cta" href="#menu" onClick={closeMenu}>Order now <span aria-hidden="true">↗</span></a>
+        <nav className={tw(`main-nav ${menuOpen ? "main-nav-open" : ""}`)} aria-label="Main navigation">
+          <a className={tw("main-nav-link")} href="#home" onClick={closeMenu}>Home</a>
+          <a className={tw("main-nav-link")} href="#menu" onClick={closeMenu}>The menu</a>
+          <a className={tw("main-nav-link")} href="#story" onClick={closeMenu}>Our story</a>
+          <a className={tw("main-nav-link")} href="#visit" onClick={closeMenu}>Visit</a>
+          <Link className={tw("nav-account-link")} to="/login" onClick={closeMenu}>Sign in</Link>
+          <a className={tw("nav-cta")} href="#menu" onClick={closeMenu}>Order now <span aria-hidden="true">↗</span></a>
         </nav>
       </header>
 
-      <section className="hero" id="home">
-        <div className="hero-image" role="img" aria-label="A freshly made coffee on a café table" />
-        <div className="hero-copy">
-          <p className="eyebrow"><span /> COFFEE FOR EVERYDAY MOMENTS</p>
-          <h1>Your daily<br />cup of <em>comfort.</em></h1>
-          <p className="hero-description">
+      <section className={tw("hero")} id="home">
+        <div className={tw("hero-image")} role="img" aria-label="A freshly made coffee on a café table" />
+        <div className={tw("hero-copy")}>
+          <p className={tw("hero-eyebrow")}><span className={tw("eyebrow-line")} /> COFFEE FOR EVERYDAY MOMENTS</p>
+          <h1 className={tw("hero-title")}>Your daily<br />cup of <em className={tw("hero-title-accent")}>comfort.</em></h1>
+          <p className={tw("hero-description")}>
             Specialty coffee, made fresh for your everyday moments. Come as
             you are; we’ll put the kettle on.
           </p>
-          <div className="hero-actions">
-            <a className="button button-dark" href="#menu">Order now <span aria-hidden="true">↗</span></a>
-            <a className="text-link" href="#menu">View menu <span aria-hidden="true">↓</span></a>
+          <div className={tw("hero-actions")}>
+            <a className={tw("hero-button")} href="#menu">Order now <span aria-hidden="true">↗</span></a>
+            <a className={tw("hero-view-link")} href="#menu">View menu <span className={tw("hero-link-arrow")} aria-hidden="true">↓</span></a>
           </div>
         </div>
-        <div className="hero-photo-caption">
+        <div className={tw("hero-photo-caption")}>
           <span>POUR OVER</span>
           <span>BREWED TO ORDER</span>
         </div>
       </section>
 
-      <section className="menu-section section-pad" id="menu">
-        <div className="section-heading">
+      <section className={tw("menu-section section-pad")} id="menu">
+        <div className={tw("section-heading")}>
           <div>
-            <p className="eyebrow"><span /> A GOOD PLACE TO START</p>
-            <h2>Favorites from<br />the <em>coffee bar.</em></h2>
+            <p className={tw("section-eyebrow")}><span className={tw("eyebrow-line")} /> A GOOD PLACE TO START</p>
+            <h2 className={tw("section-title")}>Favorites from<br />the <em className={tw("section-title-accent")}>coffee bar.</em></h2>
           </div>
-          <p className="section-intro">
+          <p className={tw("section-intro")}>
             The familiar ones, made properly. Find your usual—or make a new one.
           </p>
         </div>
-        <div className="menu-grid">
+        <div className={tw("menu-grid")}>
           {drinks.map((drink, index) => (
-            <article className="menu-card" key={drink.name}>
-              <div className="menu-card-image">
-                <img src={drink.image} alt={drink.imageAlt} loading="lazy" />
-                <span className="menu-number">0{index + 1}</span>
+            <article className={tw("menu-card")} key={drink.name}>
+              <div className={tw("menu-card-image")}>
+                <img className={tw("menu-card-img")} src={drink.image} alt={drink.imageAlt} loading="lazy" />
+                <span className={tw("menu-number")}>0{index + 1}</span>
               </div>
-              <div className="menu-card-details">
-                <div className="menu-card-copy">
-                  <span className="menu-tag">{drink.tag}</span>
-                  <h3>{drink.name}</h3>
-                  <p className="menu-note">{drink.note}</p>
+              <div className={tw("menu-card-details")}>
+                <div className={tw("menu-card-copy")}>
+                  <span className={tw("menu-tag")}>{drink.tag}</span>
+                  <h3 className={tw("menu-card-title")}>{drink.name}</h3>
+                  <p className={tw("menu-note")}>{drink.note}</p>
                 </div>
-                <span className="menu-price">{drink.price}</span>
+                <span className={tw("menu-price")}>{drink.price}</span>
               </div>
             </article>
           ))}
         </div>
-        <a className="menu-more" href="#visit">Visit Kape Amore <span aria-hidden="true">↗</span></a>
+        <a className={tw("menu-more")} href="#visit">Visit Kape Amore <span aria-hidden="true">↗</span></a>
       </section>
 
-      <div className="service-strip" aria-label="Ways to enjoy Kape Amore">
-        <span>01 <strong>DINE IN</strong></span>
-        <span>02 <strong>TAKE AWAY</strong></span>
-        <span>03 <strong>DELIVERY</strong></span>
-        <span className="service-strip-note">YOUR COFFEE, YOUR WAY</span>
+      <div className={tw("service-strip")} aria-label="Ways to enjoy Kape Amore">
+        <span className={tw("service-strip-item")}>01 <strong className={tw("service-strip-strong")}>DINE IN</strong></span>
+        <span className={tw("service-strip-item")}>02 <strong className={tw("service-strip-strong")}>TAKE AWAY</strong></span>
+        <span className={tw("service-strip-item")}>03 <strong className={tw("service-strip-strong")}>DELIVERY</strong></span>
+        <span className={tw("service-strip-note")}>YOUR COFFEE, YOUR WAY</span>
       </div>
 
-      <section className="story-section" id="story">
-        <div className="story-image" role="img" aria-label="Coffee being prepared by hand" />
-        <div className="story-copy">
-          <p className="eyebrow eyebrow-light"><span /> THE KAPE AMORE WAY</p>
-          <h2>A good cup<br />brings us <em>together.</em></h2>
-          <p>Kape Amore is built around the simple things: coffee made with care, food worth sharing, and space to settle in.</p>
-          <p>
+      <section className={tw("story-section")} id="story">
+        <div className={tw("story-image")} role="img" aria-label="Coffee being prepared by hand" />
+        <div className={tw("story-copy")}>
+          <p className={tw("story-eyebrow")}><span className={tw("eyebrow-line")} /> THE KAPE AMORE WAY</p>
+          <h2 className={tw("story-title")}>A good cup<br />brings us <em className={tw("story-title-accent")}>together.</em></h2>
+          <p className={tw("story-paragraph")}>Kape Amore is built around the simple things: coffee made with care, food worth sharing, and space to settle in.</p>
+          <p className={tw("story-paragraph")}>
             Whether you're catching up, getting things done, or simply taking a
             moment for yourself, there's a seat waiting here.
           </p>
-          <a className="story-link" href="#visit">Come say hello <span aria-hidden="true">↗</span></a>
-          <span className="story-mark" aria-hidden="true">KA / 01</span>
+          <a className={tw("story-link")} href="#visit">Come say hello <span className={tw("story-link-arrow")} aria-hidden="true">↗</span></a>
+          <span className={tw("story-mark")} aria-hidden="true">KA / 01</span>
         </div>
       </section>
 
-      <section className="visit-section section-pad" id="visit">
-        <div className="visit-heading">
-          <p className="eyebrow"><span /> STOP IN WHENEVER</p>
-          <h2>Make room<br />for a <em>coffee break.</em></h2>
+      <section className={tw("visit-section section-pad")} id="visit">
+        <div className={tw("visit-heading")}>
+          <p className={tw("visit-eyebrow")}><span className={tw("eyebrow-line")} /> STOP IN WHENEVER</p>
+          <h2 className={tw("visit-title")}>Make room<br />for a <em className={tw("visit-title-accent")}>coffee break.</em></h2>
         </div>
-        <div className="visit-details">
-          <div className="visit-item">
-            <span className="visit-index">01</span>
+        <div className={tw("visit-details")}>
+          <div className={tw("visit-item")}>
+            <span className={tw("visit-index")}>01</span>
             <div>
-              <h3>Come by</h3>
-              <p>Drop in for a slow morning, a quick pick-me-up, or anything in between.</p>
-              <span className="detail-note">Dine in · Take away · Delivery</span>
+              <h3 className={tw("visit-item-title")}>Come by</h3>
+              <p className={tw("visit-item-description")}>Drop in for a slow morning, a quick pick-me-up, or anything in between.</p>
+              <span className={tw("detail-note")}>Dine in · Take away · Delivery</span>
             </div>
           </div>
-          <div className="visit-item">
-            <span className="visit-index">02</span>
+          <div className={tw("visit-item")}>
+            <span className={tw("visit-index")}>02</span>
             <div>
-              <h3>Stay a little</h3>
-              <p>Bring a friend, bring a book, or just bring yourself. We’ll take care of the coffee.</p>
-              <a className="detail-link" href="#story">A little about us <span aria-hidden="true">↗</span></a>
+              <h3 className={tw("visit-item-title")}>Stay a little</h3>
+              <p className={tw("visit-item-description")}>Bring a friend, bring a book, or just bring yourself. We’ll take care of the coffee.</p>
+              <a className={tw("detail-link")} href="#story">A little about us <span aria-hidden="true">↗</span></a>
             </div>
           </div>
         </div>
       </section>
 
-      <footer className="site-footer">
-        <a className="wordmark footer-wordmark" href="#home">
-          <img className="brand-logo" src="/images/kape-amore-logo.png" alt="" />
-          <span className="wordmark-name"><span>KAPE <em>AMORE</em></span><small>COFFEE · FOOD · GOOD VIBES</small></span>
+      <footer className={tw("site-footer")}>
+        <a className={tw("wordmark footer-wordmark")} href="#home">
+          <img className={tw("brand-logo")} src="/images/kape-amore-logo.png" alt="" />
+          <span className={tw("wordmark-name")}><span>KAPE <em className={tw("wordmark-name-em")}>AMORE</em></span><small className={tw("wordmark-name-small")}>COFFEE · FOOD · GOOD VIBES</small></span>
         </a>
-        <p>A little coffee, a lot of heart.</p>
-        <a className="back-top" href="#home">BACK TO TOP <span aria-hidden="true">↑</span></a>
-        <span className="footer-copyright">© 2026 Kape Amore</span>
+        <p className={tw("footer-copy")}>A little coffee, a lot of heart.</p>
+        <a className={tw("back-top")} href="#home">BACK TO TOP <span aria-hidden="true">↑</span></a>
+        <span className={tw("footer-copyright")}>© 2026 Kape Amore</span>
       </footer>
     </main>
   );
@@ -197,7 +198,7 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/account/*" element={<RequireAuth excludeRole="admin"><AccountDashboard /></RequireAuth>} />
-          <Route path="/admin" element={<RequireAuth role="admin"><AdminPage /></RequireAuth>} />
+          <Route path="/admin/*" element={<RequireAuth role={["admin", "manager", "cashier", "staff"]} permission="dashboard.view"><AdminDashboard /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
