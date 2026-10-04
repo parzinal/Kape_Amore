@@ -5,7 +5,7 @@ import { tw } from "../tw";
 export type DashboardNavItem = {
   label: string;
   to: string;
-  icon: "overview" | "orders" | "rewards" | "profile" | "menu" | "tables" | "delivery" | "customers" | "team" | "reports" | "settings";
+  icon: "overview" | "orders" | "browse" | "rewards" | "profile" | "menu" | "tables" | "delivery" | "customers" | "team" | "reports" | "settings";
 };
 
 type DashboardSidebarProps = {
@@ -21,6 +21,7 @@ type DashboardSidebarProps = {
 const iconPaths: Record<DashboardNavItem["icon"], string> = {
   overview: "M3 3h7v7H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 14h7v7H3z",
   orders: "M5 4h14v17H5zM8 8h8M8 12h8M8 16h5",
+  browse: "M3 4h2l2.2 10.2a2 2 0 002 1.6h7.7a2 2 0 001.9-1.4L21 8H6M10 20a1 1 0 100-2 1 1 0 000 2zM18 20a1 1 0 100-2 1 1 0 000 2z",
   rewards: "M12 3l2.2 5.1 5.5.5-4.2 3.6 1.3 5.4L12 14.7l-4.8 2.9 1.3-5.4-4.2-3.6 5.5-.5z",
   profile: "M20 21a8 8 0 00-16 0M12 12a4 4 0 100-8 4 4 0 000 8z",
   menu: "M4 6h16M4 12h16M4 18h16",

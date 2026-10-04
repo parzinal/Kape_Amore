@@ -32,6 +32,57 @@ class AdminWorkspaceTest extends TestCase
         $this->actingAs($customer)->getJson('/api/admin/workspace')->assertForbidden();
     }
 
+    public function test_customer_catalog_includes_product_status_and_only_active_categories_and_sizes(): void
+    {
+        $this->actingAs($this->admin());
+        $category = $this->postJson('/api/admin/records/categories', ['name' => 'Coffee'])->assertCreated()->json('record');
+        $inactiveCategory = $this->postJson('/api/admin/records/categories', ['name' => 'Hidden'])->assertCreated()->json('record');
+        $available = $this->postJson('/api/admin/records/products', [
+            'category_id' => $category['id'],
+            'name' => 'Latte',
+            'base_price' => 145,
+        ])->assertCreated()->json('record');
+        $largeSize = $this->postJson('/api/admin/records/variations', [
+            'product_id' => $available['id'],
+            'name' => 'Large',
+            'price' => 185,
+        ])->assertCreated()->json('record');
+        $this->postJson('/api/admin/records/variations', [
+            'product_id' => $available['id'],
+            'name' => 'Unavailable size',
+            'price' => 200,
+            'is_available' => false,
+        ])->assertCreated();
+        $unavailable = $this->postJson('/api/admin/records/products', [
+            'category_id' => $category['id'],
+            'name' => 'Unavailable coffee',
+            'base_price' => 120,
+            'is_available' => false,
+        ])->assertCreated()->json('record');
+        $hiddenCategoryProduct = $this->postJson('/api/admin/records/products', [
+            'category_id' => $inactiveCategory['id'],
+            'name' => 'Hidden category coffee',
+            'base_price' => 130,
+        ])->assertCreated()->json('record');
+        DB::table('categories')->where('id', $inactiveCategory['id'])->update(['is_active' => false]);
+        DB::table('products')->where('id', $hiddenCategoryProduct['id'])->update(['deleted_at' => now()]);
+
+        $customer = User::factory()->create();
+        $customer->roles()->attach(Role::where('name', 'customer')->firstOrFail());
+        $this->actingAs($customer)
+            ->getJson('/api/customer/catalog')
+            ->assertOk()
+            ->assertJsonPath('records.products.0.id', $available['id'])
+            ->assertJsonPath('records.products.0.name', 'Latte')
+            ->assertJsonPath('records.products.1.id', $unavailable['id'])
+            ->assertJsonPath('records.products.1.is_available', false)
+            ->assertJsonPath('records.variations.0.id', $largeSize['id'])
+            ->assertJsonPath('records.variations.0.name', 'Large')
+            ->assertJsonCount(1, 'records.variations')
+            ->assertJsonMissing(['name' => 'Hidden category coffee'])
+            ->assertJsonPath('records.categories.0.id', $category['id']);
+    }
+
     public function test_manager_and_cashier_permissions_limit_workspace_actions(): void
     {
         $this->seed(PermissionSeeder::class);

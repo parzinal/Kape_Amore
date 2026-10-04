@@ -58,8 +58,6 @@ function PasswordInput({
   autoComplete: string;
   minLength?: number;
 }) {
-  const [visible, setVisible] = useState(false);
-
   return (
     <span className={tw("auth-password-field")}>
       <input
@@ -69,27 +67,9 @@ function PasswordInput({
         minLength={minLength}
         onChange={(event) => onChange(event.target.value)}
         required
-        type={visible ? "text" : "password"}
+        type="password"
         value={value}
       />
-      <button
-        aria-label={visible ? "Hide password" : "Show password"}
-        aria-pressed={visible}
-        className={tw("auth-password-toggle")}
-        onClick={() => setVisible((isVisible) => !isVisible)}
-        type="button"
-      >
-        {visible ? (
-          <svg className={tw("auth-password-icon")} aria-hidden="true" fill="none" viewBox="0 0 24 24">
-            <path d="M3 3l18 18M10.6 10.7a2 2 0 002.7 2.7M9.9 5.2A10.8 10.8 0 0112 5c5.2 0 9 4.4 10 7-.3 1-1.2 2.4-2.5 3.6M6.2 6.3C3.9 7.7 2.4 9.9 2 12c.5 1.6 3.3 7 10 7 1.2 0 2.3-.2 3.3-.6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
-          </svg>
-        ) : (
-          <svg className={tw("auth-password-icon")} aria-hidden="true" fill="none" viewBox="0 0 24 24">
-            <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.7" />
-            <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.7" />
-          </svg>
-        )}
-      </button>
     </span>
   );
 }

@@ -16,6 +16,14 @@ export type AdminWorkspace = {
   records: Record<string, AdminRecord[]>;
 };
 
+export type CustomerCatalog = {
+  records: {
+    products: AdminRecord[];
+    categories: AdminRecord[];
+    variations: AdminRecord[];
+  };
+};
+
 export type AdminReport = {
   period: { from: string; to: string };
   sales: number;
@@ -52,7 +60,7 @@ async function messageFor(response: Response): Promise<string> {
     return body.message;
   }
   return response.status === 401
-    ? "Your admin session has expired. Sign in again."
+    ? "Your session has expired. Sign in again."
     : "The server could not complete this request.";
 }
 
@@ -94,4 +102,8 @@ export const adminApi = {
   assignTables: (orderId: number, tableIds: number[]) => mutate<{ table_ids: number[] }>(`/api/admin/orders/${orderId}/tables`, "POST", { table_ids: tableIds }),
   assignPermissions: (roleId: number, permissionIds: number[]) => mutate<{ permission_ids: number[] }>(`/api/admin/roles/${roleId}/permissions`, "POST", { permission_ids: permissionIds }),
   inventoryMovement: (ingredientId: number, body: unknown) => mutate<{ record: AdminRecord }>(`/api/admin/records/ingredients/${ingredientId}`, "PATCH", body),
+};
+
+export const customerApi = {
+  catalog: () => request<CustomerCatalog>("/api/customer/catalog"),
 };
