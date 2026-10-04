@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { tw } from "../tw";
-import { adminApi, adminImageUrl } from "./adminApi";
-import type { AdminRecord, AdminWorkspace } from "./adminApi";
+import { adminApi, adminImageUrl, paymentMethodChoices, paymentMethodsFromSettings } from "./adminApi";
+import type { AdminRecord, AdminWorkspace, PaymentMethod } from "./adminApi";
 
 type SelectOption = { value: string; label: string };
 type ProductSizeDraft = { id?: number; name: string; sku: string; price: string; is_available: boolean };
@@ -489,6 +489,10 @@ function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }:
   const orderItems = workspace.records["order-items"] ?? [];
   const itemModifiers = workspace.records["order-item-modifiers"] ?? [];
   const categories = workspace.records.categories ?? [];
+  const availablePaymentMethods = paymentMethodsFromSettings(workspace.records.settings ?? []).filter((method) => method.enabled);
+  const selectedPaymentMethod = availablePaymentMethods.some((method) => method.code === paymentMethod)
+    ? paymentMethod
+    : availablePaymentMethods[0]?.code ?? "";
   const availableProducts = products.filter((product) => product.is_available);
   const filteredProducts = availableProducts.filter((product) =>
     (!categoryId || String(product.category_id) === categoryId)
@@ -555,7 +559,7 @@ function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }:
       return;
     }
     const canTakePayment = workspace.records.payments !== undefined;
-    if (canTakePayment && paymentMethod === "cash" && Number(tendered) < totalEstimate) {
+    if (canTakePayment && selectedPaymentMethod === "cash" && Number(tendered) < totalEstimate) {
       setError(`Cash received must be at least ${money(totalEstimate)}.`);
       return;
     }
@@ -584,9 +588,9 @@ function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }:
       }
       if (canTakePayment) {
         await adminApi.pay(order.id, {
-          method: paymentMethod,
+          method: selectedPaymentMethod,
           amount: Number(order.total),
-          tendered_amount: paymentMethod === "cash" ? Number(tendered) : undefined,
+          tendered_amount: selectedPaymentMethod === "cash" ? Number(tendered) : undefined,
         });
       }
       setPendingCheckoutOrder(null);
@@ -757,12 +761,13 @@ function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }:
             {orderType === "delivery" && <div><span>Delivery fee (estimate)</span><strong>{money(deliveryEstimate)}</strong></div>}
             <div className={tw("admin-pos-grand-total")}><span>{pendingCheckoutOrder ? `Order total · ${String(pendingCheckoutOrder.order_number)}` : "Total"}</span><strong>{money(Number(pendingCheckoutOrder?.total ?? totalEstimate))}</strong></div>
           </div>
-          {workspace.records.payments !== undefined && <div className={tw("admin-pos-tender")}><label><span>Payment method</span><select disabled={Boolean(pendingCheckoutOrder)} onChange={(event) => setPaymentMethod(event.target.value)} value={paymentMethod}>{["cash", "card", "e_wallet", "bank_transfer", "other"].map((method) => <option key={method} value={method}>{method.replace(/_/g, " ")}</option>)}</select></label>
-            {paymentMethod === "cash" && <label><span>Cash received</span><input min="0" onChange={(event) => setTendered(event.target.value)} placeholder={money(Number(pendingCheckoutOrder?.total ?? totalEstimate))} step="0.01" type="number" value={tendered} /></label>}
+          {workspace.records.payments !== undefined && <div className={tw("admin-pos-tender")}><label><span>Payment method</span><select disabled={Boolean(pendingCheckoutOrder) || availablePaymentMethods.length === 0} onChange={(event) => setPaymentMethod(event.target.value)} value={selectedPaymentMethod}>{availablePaymentMethods.map((method) => <option key={method.code} value={method.code}>{method.label}</option>)}</select></label>
+            {selectedPaymentMethod === "cash" && <label><span>Cash received</span><input min="0" onChange={(event) => setTendered(event.target.value)} placeholder={money(Number(pendingCheckoutOrder?.total ?? totalEstimate))} step="0.01" type="number" value={tendered} /></label>}
           </div>}
+          {workspace.records.payments !== undefined && availablePaymentMethods.length === 0 && <p className={tw("admin-form-help")}>Enable at least one payment method in Settings before taking payment.</p>}
           {pendingCheckoutOrder && <p className={tw("admin-pos-pending-note")} role="status">Order created but payment is not confirmed yet. Correct the payment details and retry; this will not create a duplicate order.</p>}
           {error && <p className={tw("admin-form-error")} role="alert">{error}</p>}
-          <button className={tw("admin-pos-checkout")} disabled={busy || !lines.some((line) => line.product_id)} type="submit"><span>▣</span>{busy ? "Processing…" : pendingCheckoutOrder ? "Retry Payment" : workspace.records.payments !== undefined ? "Process Transaction" : "Create Order"}</button>
+          <button className={tw("admin-pos-checkout")} disabled={busy || !lines.some((line) => line.product_id) || (workspace.records.payments !== undefined && !selectedPaymentMethod)} type="submit"><span>▣</span>{busy ? "Processing…" : pendingCheckoutOrder ? "Retry Payment" : workspace.records.payments !== undefined ? "Process Transaction" : "Create Order"}</button>
         </aside>
       </form>}
 
@@ -829,14 +834,104 @@ function RefundPanel({ workspace, onRefresh }: { workspace: AdminWorkspace; onRe
   );
 }
 
+function PaymentMethodPanel({ workspace, onRefresh }: { workspace: AdminWorkspace; onRefresh: () => Promise<void> }) {
+  const setting = workspace.records.settings?.find((record) => record.key === "payment_methods");
+  const readMethods = () => {
+    const configured = paymentMethodsFromSettings(workspace.records.settings ?? []);
+    return configured.length > 0 ? configured : paymentMethodChoices.map((method) => ({ ...method }));
+  };
+  const [methods, setMethods] = useState<PaymentMethod[]>(readMethods);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMethods(readMethods());
+  }, [setting?.id, setting?.updated_at, setting?.value]);
+
+  function updateMethod(code: string, changes: Partial<PaymentMethod>) {
+    setMethods((current) => current.map((method) => method.code === code ? { ...method, ...changes } : method));
+  }
+
+  async function saveMethods() {
+    setError(null);
+    setSuccess(null);
+    if (!methods.some((method) => method.enabled)) {
+      setError("Keep at least one payment method enabled.");
+      return;
+    }
+    if (methods.some((method) => !method.label.trim() || method.label.length > 80)) {
+      setError("Each enabled or disabled method needs a label of 1 to 80 characters.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload = { key: "payment_methods", group: "payments", value: methods };
+      if (setting) await adminApi.update("settings", setting.id, payload);
+      else await adminApi.create("settings", payload);
+      await onRefresh();
+      setSuccess("Sandbox payment methods saved.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to save payment methods.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section aria-label="Sandbox payment methods" className={tw("dashboard-panel admin-resource-panel")}>
+      <div className={tw("dashboard-panel-heading")}>
+        <div>
+          <p className={tw("dashboard-section-kicker")}>SANDBOX CHECKOUT</p>
+          <h2 className={tw("dashboard-panel-title")}>Payment methods</h2>
+        </div>
+      </div>
+      <p className={tw("admin-form-help")}>Manage the options shown at customer checkout and the POS. These are simulations only; no real payments are collected.</p>
+      {setting && paymentMethodsFromSettings([setting]).length === 0 && <p className={tw("admin-form-error")} role="alert">The saved payment-method setting is invalid. Review these options and save to replace it with a valid configuration.</p>}
+      <div className={tw("admin-payment-method-list")}>
+        {paymentMethodChoices.map((choice) => {
+          const method = methods.find((entry) => entry.code === choice.code) ?? choice;
+          return (
+            <div className={tw("admin-payment-method-row")} key={choice.code}>
+              <label className={tw("admin-field")}>
+                <span>{choice.label}</span>
+                <input
+                  maxLength={80}
+                  onChange={(event) => updateMethod(choice.code, { label: event.target.value })}
+                  value={method.label}
+                />
+              </label>
+              <label className={tw("admin-field-checkbox")}>
+                <input
+                  checked={method.enabled}
+                  onChange={(event) => updateMethod(choice.code, { enabled: event.target.checked })}
+                  type="checkbox"
+                />
+                <span>Enabled</span>
+              </label>
+            </div>
+          );
+        })}
+      </div>
+      {error && <p className={tw("admin-form-error")} role="alert">{error}</p>}
+      {success && <p className={tw("admin-form-help")} role="status">{success}</p>}
+      <button className={tw("admin-primary-button")} disabled={busy} onClick={() => void saveMethods()} type="button">
+        {busy ? "Saving…" : "Save payment methods"}
+      </button>
+    </section>
+  );
+}
+
 export function AdminFeaturePanel({
   section,
   workspace,
   onRefresh,
+  currentUserId,
 }: {
   section: string;
   workspace: AdminWorkspace;
   onRefresh: () => Promise<void>;
+  currentUserId?: number;
 }) {
   if (section === "sales") return <OrderManagement onRefresh={onRefresh} showOrderCreator showOrders={false} workspace={workspace} />;
   if (section === "payments") return <OrderManagement onRefresh={onRefresh} showOrderCreator={false} showOrders workspace={workspace} />;
@@ -846,7 +941,118 @@ export function AdminFeaturePanel({
   return (
     <div className={tw("admin-sections")}>
       {configs.map((config) => <ResourcePanel config={config} key={config.resource} onRefresh={onRefresh} workspace={workspace} />)}
+      {section === "settings" && <PaymentMethodPanel onRefresh={onRefresh} workspace={workspace} />}
+      {section === "delivery" && currentUserId !== undefined && <RiderLocationPanel currentUserId={currentUserId} workspace={workspace} />}
       {section === "team" && <RolePermissionPanel onRefresh={onRefresh} workspace={workspace} />}
     </div>
+  );
+}
+
+function RiderLocationPanel({ workspace, currentUserId }: { workspace: AdminWorkspace; currentUserId: number }) {
+  const [sharingDeliveryId, setSharingDeliveryId] = useState<number | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<string | null>(null);
+  const watchId = useRef<number | null>(null);
+  const sendingLocation = useRef(false);
+  const lastSentAt = useRef(0);
+  const assignedDeliveries = (workspace.records.deliveries ?? []).filter((delivery) =>
+    Number(delivery.rider_id) === currentUserId
+      && delivery.status === "out_for_delivery",
+  );
+
+  function stopSharing() {
+    if (watchId.current !== null && navigator.geolocation) navigator.geolocation.clearWatch(watchId.current);
+    watchId.current = null;
+    sendingLocation.current = false;
+    setSharingDeliveryId(null);
+    setMessage("Location sharing stopped. Your last location remains visible with its update time.");
+  }
+
+  useEffect(() => () => {
+    if (watchId.current !== null && navigator.geolocation) navigator.geolocation.clearWatch(watchId.current);
+  }, []);
+
+  function startSharing(deliveryId: number) {
+    setError(null);
+    setMessage(null);
+    if (!navigator.geolocation) {
+      setError("This browser does not support location sharing.");
+      return;
+    }
+    if (!window.isSecureContext) {
+      setError("Your browser requires a secure HTTPS connection to share location.");
+      return;
+    }
+
+    setSharingDeliveryId(deliveryId);
+    setLastUpdate(null);
+    lastSentAt.current = 0;
+    watchId.current = navigator.geolocation.watchPosition(
+      async (position) => {
+        if (sendingLocation.current || Date.now() - lastSentAt.current < 5000) return;
+        sendingLocation.current = true;
+        try {
+          await adminApi.shareDeliveryLocation(deliveryId, {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          });
+          lastSentAt.current = Date.now();
+          setLastUpdate(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" }));
+          setMessage("Your live location is being shared with this delivery’s customer.");
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Unable to update your location.");
+          if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
+          watchId.current = null;
+          setSharingDeliveryId(null);
+        } finally {
+          sendingLocation.current = false;
+        }
+      },
+      (cause) => {
+        const messageByCode: Record<number, string> = {
+          1: "Location permission was denied. Allow location access in your browser to share your route.",
+          2: "Your current location could not be determined. Check your device’s location settings.",
+          3: "Location request timed out. Try sharing again.",
+        };
+        setError(messageByCode[cause.code] ?? "Unable to read your current location.");
+        if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
+        watchId.current = null;
+        setSharingDeliveryId(null);
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
+    );
+  }
+
+  return (
+    <section aria-label="Driver location sharing" className={tw("dashboard-panel admin-resource-panel rider-location-panel")}>
+      <div className={tw("dashboard-panel-heading")}>
+        <div>
+          <p className={tw("dashboard-section-kicker")}>DRIVER TOOLS</p>
+          <h2 className={tw("dashboard-panel-title")}>Share your live location</h2>
+        </div>
+        <span className={tw("admin-count")}>{assignedDeliveries.length} active route{assignedDeliveries.length === 1 ? "" : "s"}</span>
+      </div>
+      <p className={tw("admin-form-help")}>Location is sent only while you choose to share it. Keep this page open while delivering; customers see updates on their order tracking page.</p>
+      {assignedDeliveries.length === 0 ? (
+        <p className={tw("admin-empty-copy")}>You have no deliveries assigned to you that are currently out for delivery.</p>
+      ) : assignedDeliveries.map((delivery) => (
+        <div className={tw("rider-location-row")} key={delivery.id}>
+          <div>
+            <strong>Order {String((workspace.records.orders ?? []).find((order) => order.id === delivery.order_id)?.order_number ?? delivery.order_id)}</strong>
+            <span>{String(delivery.recipient_name)} · {String(delivery.address_snapshot)}</span>
+          </div>
+          {sharingDeliveryId === delivery.id ? (
+            <button className={tw("admin-secondary-button rider-location-stop")} onClick={stopSharing} type="button">Stop sharing</button>
+          ) : (
+            <button className={tw("admin-primary-button rider-location-start")} disabled={sharingDeliveryId !== null} onClick={() => startSharing(delivery.id)} type="button">Start location sharing</button>
+          )}
+        </div>
+      ))}
+      {lastUpdate && <p className={tw("rider-location-state")} role="status">Last sent at {lastUpdate}.</p>}
+      {message && <p className={tw("rider-location-state")} role="status">{message}</p>}
+      {error && <p className={tw("admin-form-error")} role="alert">{error}</p>}
+    </section>
   );
 }

@@ -24,6 +24,88 @@ export type CustomerCatalog = {
   };
 };
 
+export type PaymentMethod = { code: string; label: string; enabled: boolean };
+
+export type CustomerCheckoutInput = {
+  payment_method: string;
+  items: Array<{ product_id: number; variation_id: number | null; quantity: number }>;
+  recipient_name: string;
+  phone: string;
+  address_line: string;
+  address_line_2?: string;
+  city: string;
+  region?: string;
+  postal_code?: string;
+  delivery_notes?: string;
+  notes?: string;
+  customer_latitude?: number;
+  customer_longitude?: number;
+};
+
+export type CustomerDeliveryTracking = {
+  id: number;
+  order_id: number;
+  order_number: string;
+  status: string;
+  total: number;
+  rider_id: number | null;
+  rider_name: string | null;
+  rider_latitude: number | null;
+  rider_longitude: number | null;
+  rider_location_updated_at: string | null;
+  customer_latitude: number | null;
+  customer_longitude: number | null;
+};
+
+export type CustomerDeliveriesResponse = {
+  deliveries: CustomerDeliveryTracking[];
+};
+
+export type CustomerCheckoutResult = {
+  record: AdminRecord;
+  message: string;
+};
+
+export const paymentMethodChoices: PaymentMethod[] = [
+  { code: "cash", label: "Cash on delivery", enabled: true },
+  { code: "card", label: "Card (sandbox)", enabled: true },
+  { code: "e_wallet", label: "E-wallet (sandbox)", enabled: true },
+  { code: "bank_transfer", label: "Bank transfer (sandbox)", enabled: true },
+  { code: "other", label: "Other (sandbox)", enabled: true },
+];
+
+export function paymentMethodsFromSettings(settings: AdminRecord[]): PaymentMethod[] {
+  const setting = settings.find((record) => record.key === "payment_methods");
+  if (!setting) return paymentMethodChoices.map((method) => ({ ...method }));
+
+  let configured: unknown = setting.value;
+  if (typeof configured === "string") {
+    try {
+      configured = JSON.parse(configured);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(configured)) return [];
+
+  return paymentMethodChoices.map((defaultMethod) => {
+    const method = configured.find((candidate: unknown) => {
+      return candidate !== null
+        && typeof candidate === "object"
+        && "code" in candidate
+        && candidate.code === defaultMethod.code;
+    });
+    if (!method || typeof method !== "object" || !("label" in method) || !("enabled" in method)) {
+      return { ...defaultMethod, enabled: false };
+    }
+    return {
+      code: defaultMethod.code,
+      label: typeof method.label === "string" && method.label.trim() ? method.label.trim() : defaultMethod.label,
+      enabled: method.enabled === true,
+    };
+  });
+}
+
 export type AdminReport = {
   period: { from: string; to: string };
   sales: number;
@@ -102,8 +184,13 @@ export const adminApi = {
   assignTables: (orderId: number, tableIds: number[]) => mutate<{ table_ids: number[] }>(`/api/admin/orders/${orderId}/tables`, "POST", { table_ids: tableIds }),
   assignPermissions: (roleId: number, permissionIds: number[]) => mutate<{ permission_ids: number[] }>(`/api/admin/roles/${roleId}/permissions`, "POST", { permission_ids: permissionIds }),
   inventoryMovement: (ingredientId: number, body: unknown) => mutate<{ record: AdminRecord }>(`/api/admin/records/ingredients/${ingredientId}`, "PATCH", body),
+  shareDeliveryLocation: (deliveryId: number, body: { latitude: number; longitude: number; accuracy?: number }) =>
+    mutate<{ updated_at: string }>(`/api/driver/deliveries/${deliveryId}/location`, "POST", body),
 };
 
 export const customerApi = {
   catalog: () => request<CustomerCatalog>("/api/customer/catalog"),
+  paymentMethods: () => request<{ methods: PaymentMethod[] }>("/api/customer/payment-methods"),
+  checkout: (body: CustomerCheckoutInput) => mutate<CustomerCheckoutResult>("/api/customer/checkout", "POST", body),
+  deliveries: () => request<CustomerDeliveriesResponse>("/api/customer/deliveries"),
 };

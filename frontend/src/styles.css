@@ -46,6 +46,355 @@ body {
   }
 }
 
+.delivery-tracking-card {
+  overflow: hidden;
+  border: 1px solid #e9e0d4;
+  border-radius: 10px;
+  background: #fffdfa;
+  box-shadow: 0 8px 24px rgb(43 31 20 / 5%);
+}
+
+.delivery-map-loading {
+  display: grid;
+  min-height: 120px;
+  place-items: center;
+  border: 1px solid #e9e0d4;
+  border-radius: 8px;
+  background: #faf7f2;
+  color: #776f65;
+  font-size: 11px;
+}
+
+.delivery-tracking-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+}
+
+.delivery-tracking-heading .dashboard-section-kicker {
+  margin: 0 0 6px;
+}
+
+.delivery-tracking-heading h3 {
+  margin: 0;
+  font-family: Georgia, serif;
+  font-size: 19px;
+  font-weight: 500;
+  color: #30271f;
+}
+
+.delivery-tracking-status {
+  border-radius: 999px;
+  background: #f4ebdd;
+  padding: 6px 10px;
+  color: #735234;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.delivery-tracking-status-out_for_delivery {
+  background: #e9f1e8;
+  color: #426c45;
+}
+
+.delivery-tracking-map {
+  position: relative;
+  height: clamp(250px, 38vw, 390px);
+  background: #eee9df;
+}
+
+.delivery-tracking-map .leaflet-container {
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  font-family: "DM Sans", sans-serif;
+}
+
+.delivery-map-marker {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.delivery-map-marker span {
+  display: flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid white;
+  border-radius: 50%;
+  box-shadow: 0 3px 12px rgb(36 28 21 / 30%);
+  font-size: 20px;
+}
+
+.delivery-map-marker-rider span {
+  background: #693a24;
+}
+
+.delivery-map-marker-customer span {
+  background: #fff9ed;
+  color: #9a5232;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.delivery-map-route {
+  stroke: #865536;
+  stroke-dasharray: 7 9;
+  stroke-linecap: round;
+  opacity: .82;
+}
+
+.delivery-map-waiting {
+  display: grid;
+  height: 100%;
+  align-content: center;
+  justify-items: center;
+  padding: 30px;
+  text-align: center;
+  background:
+    radial-gradient(ellipse at 25% 20%, rgb(255 255 255 / 85%), transparent 34%),
+    linear-gradient(145deg, #e9e7dc, #f5efe5);
+}
+
+.delivery-map-waiting > span {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  margin-bottom: 12px;
+  border-radius: 50%;
+  background: #fffdfa;
+  color: #966b47;
+  font-size: 25px;
+  box-shadow: 0 4px 15px rgb(54 43 30 / 10%);
+}
+
+.delivery-map-waiting strong {
+  max-width: 340px;
+  font-size: 12px;
+  color: #45382c;
+}
+
+.delivery-map-waiting p {
+  max-width: 370px;
+  margin: 7px 0 0;
+  color: #756c62;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.delivery-tracking-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  padding: 15px 20px 9px;
+}
+
+.delivery-tracking-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.delivery-tracking-metric-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: #f4ebdd;
+  color: #78452b;
+  font-size: 17px;
+}
+
+.delivery-tracking-footer > div > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.delivery-tracking-footer small {
+  color: #82796e;
+  font-size: 9px;
+}
+
+.delivery-tracking-footer strong {
+  color: #342a21;
+  font-size: 12px;
+}
+
+.delivery-tracking-footer > p {
+  margin: 0;
+  color: #776f65;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.delivery-tracking-updated {
+  margin: 0;
+  padding: 0 20px 16px;
+  color: #8d857a;
+  font-size: 8px;
+}
+
+.customer-delivery-tracking-list {
+  display: grid;
+  gap: 18px;
+}
+
+.customer-tracking-intro h2 {
+  margin: 0;
+}
+
+.customer-tracking-intro p:last-child {
+  margin: 6px 0 0;
+  color: #776f65;
+  font-size: 11px;
+}
+
+.customer-location-consent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #e9e0d4;
+  border-radius: 6px;
+  background: #faf7f2;
+  padding: 12px;
+}
+
+.customer-location-consent > div {
+  display: grid;
+  flex: 1 1 210px;
+  gap: 4px;
+}
+
+.customer-location-consent strong {
+  color: #45382c;
+  font-size: 10px;
+}
+
+.customer-location-consent span {
+  color: #81796f;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.customer-location-consent button {
+  min-height: 32px;
+  border: 1px solid #d8caba;
+  border-radius: 4px;
+  background: #fffdfa;
+  padding: 0 10px;
+  color: #70452c;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.customer-location-consent button:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+
+.customer-location-consent > p {
+  flex-basis: 100%;
+  margin: 0;
+  color: #a44334;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.customer-confirmation-actions {
+  width: 100%;
+  max-width: 390px;
+}
+
+.customer-confirmation-actions .customer-confirmation-button {
+  margin-top: 4px;
+}
+
+.customer-confirmation-secondary {
+  width: 100%;
+  min-height: 38px;
+  border: 0;
+  background: transparent;
+  color: #776f65;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.rider-location-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid #ece7df;
+  padding: 13px 0;
+}
+
+.rider-location-row > div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.rider-location-row strong {
+  color: #45382c;
+  font-size: 11px;
+}
+
+.rider-location-row span {
+  overflow: hidden;
+  color: #81796f;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rider-location-start,
+.rider-location-stop {
+  flex: 0 0 auto;
+  min-height: 36px;
+}
+
+.rider-location-state {
+  margin: 8px 0 0;
+  color: #426c45;
+  font-size: 10px;
+}
+
+@media (max-width: 520px) {
+  .delivery-tracking-heading {
+    padding: 14px;
+  }
+
+  .delivery-tracking-map {
+    height: 260px;
+  }
+
+  .delivery-tracking-footer {
+    gap: 12px;
+    padding-inline: 14px;
+  }
+
+  .delivery-tracking-updated {
+    padding-inline: 14px;
+  }
+
+  .rider-location-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 .hero::after {
   position: absolute;
   z-index: 0;

@@ -388,7 +388,7 @@ export function AdminDashboard() {
           {loading && <p className={tw("admin-loading")} role="status">Loading admin data…</p>}
           {!loading && workspace && section === "overview" && <Overview workspace={workspace} />}
           {!loading && workspace && section === "reports" && <Reports onError={reportError} />}
-          {!loading && workspace && section !== "overview" && section !== "reports" && <AdminFeaturePanel onRefresh={loadWorkspace} section={section} workspace={workspace} />}
+          {!loading && workspace && section !== "overview" && section !== "reports" && <AdminFeaturePanel currentUserId={user.id} onRefresh={loadWorkspace} section={section} workspace={workspace} />}
         </div>
       </main>
     </div>

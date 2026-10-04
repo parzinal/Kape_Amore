@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState } from "react";
-import type { MouseEvent } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import type { FormEvent, MouseEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import type { DashboardNavItem } from "./DashboardSidebar";
 import { DashboardSidebar } from "./DashboardSidebar";
 import { tw } from "../tw";
 import { customerApi, adminImageUrl } from "./adminApi";
-import type { AdminRecord, CustomerCatalog } from "./adminApi";
+import type { AdminRecord, CustomerCatalog, CustomerDeliveryTracking, PaymentMethod } from "./adminApi";
+
+const DeliveryTrackingMap = lazy(() => import("./DeliveryTrackingMap").then((module) => ({ default: module.DeliveryTrackingMap })));
 
 const navigation: DashboardNavItem[] = [
   { label: "Overview", to: "/account", icon: "overview" },
@@ -78,7 +80,7 @@ function ActivityChart() {
         <span className={tw("dashboard-preview-tag")}>Sample preview</span>
       </div>
 
-      <p className={tw("dashboard-chart-note")}>Illustrative sample only. Your real order activity will appear here once ordering is connected.</p>
+      <p className={tw("dashboard-chart-note")}>Illustrative sample only. This chart is not connected to your saved delivery orders.</p>
 
       <div className={tw("dashboard-chart-wrap")}>
         <svg
@@ -119,7 +121,7 @@ function ActivityChart() {
 
       <div className={tw("dashboard-chart-legend")}>
         <span className={tw("dashboard-chart-legend-label")}><i className={tw("dashboard-chart-legend-dot")} aria-hidden="true" /> Activity preview</span>
-        <span>Actual account data is not connected yet</span>
+        <span>Customer activity is not connected yet</span>
       </div>
     </section>
   );
@@ -134,6 +136,29 @@ export function AccountDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<CustomerCatalog["records"] | null>(null);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[] | null>(null);
+  const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [checkoutSuccess, setCheckoutSuccess] = useState<{ orderNumber: string; total: number; message: string; paymentLabel: string } | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("");
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [customerLocation, setCustomerLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locatingCustomer, setLocatingCustomer] = useState(false);
+  const [customerLocationError, setCustomerLocationError] = useState<string | null>(null);
+  const [customerDeliveries, setCustomerDeliveries] = useState<CustomerDeliveryTracking[]>([]);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
+  const [trackingRefreshKey, setTrackingRefreshKey] = useState(0);
+  const [deliveryDetails, setDeliveryDetails] = useState({
+    recipient_name: user?.name ?? "",
+    phone: "",
+    address_line: "",
+    address_line_2: "",
+    city: "",
+    region: "",
+    postal_code: "",
+    delivery_notes: "",
+  });
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedSizes, setSelectedSizes] = useState<Record<number, number>>({});
   const [orderItems, setOrderItems] = useState<Record<string, number>>({});
@@ -162,6 +187,48 @@ export function AccountDashboard() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!checkoutOpen && !checkoutSuccess) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || checkoutBusy) return;
+      setCheckoutOpen(false);
+      setCheckoutSuccess(null);
+      setCheckoutError(null);
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [checkoutBusy, checkoutOpen, checkoutSuccess]);
+
+  useEffect(() => {
+    if (location.pathname !== "/account/orders") return;
+
+    let active = true;
+    const loadDeliveries = async () => {
+      try {
+        const response = await customerApi.deliveries();
+        if (active) {
+          setCustomerDeliveries(response.deliveries);
+          setTrackingError(null);
+        }
+      } catch (cause) {
+        if (active) setTrackingError(cause instanceof Error ? cause.message : "Unable to load delivery tracking.");
+      }
+    };
+    void loadDeliveries();
+    const interval = window.setInterval(() => void loadDeliveries(), 5000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [location.pathname, trackingRefreshKey]);
 
   useEffect(() => {
     if (!cartFlight) return;
@@ -248,6 +315,7 @@ export function AccountDashboard() {
       return {
         id: productId,
         key,
+        variationId: size ? Number(size.id) : null,
         name: String(product.name),
         sizeName: typeof size?.name === "string" ? size.name : "",
         price: Number(size?.price ?? product.base_price ?? 0),
@@ -274,6 +342,7 @@ export function AccountDashboard() {
   function addItem(itemKey: string, name: string, image: string, source: HTMLButtonElement) {
     setOrderItems((current) => ({ ...current, [itemKey]: (current[itemKey] ?? 0) + 1 }));
     setError(null);
+    setCheckoutSuccess(null);
 
     const cartButton = cartButtonRef.current;
     if (!cartButton) return;
@@ -303,6 +372,80 @@ export function AccountDashboard() {
       else updated[itemKey] = nextQuantity;
       return updated;
     });
+  }
+
+  async function openCheckout() {
+    setCheckoutOpen(true);
+    setCheckoutError(null);
+    if (paymentMethods !== null) return;
+    setLoadingPaymentMethods(true);
+    try {
+      const response = await customerApi.paymentMethods();
+      setPaymentMethods(response.methods);
+      setSelectedPaymentMethod(response.methods[0]?.code ?? "");
+    } catch (cause) {
+      setCheckoutError(cause instanceof Error ? cause.message : "Unable to load payment methods.");
+    } finally {
+      setLoadingPaymentMethods(false);
+    }
+  }
+
+  async function submitCheckout(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCheckoutError(null);
+    setCheckoutBusy(true);
+    try {
+      const result = await customerApi.checkout({
+        payment_method: selectedPaymentMethod,
+        items: cartItems.map((item) => ({
+          product_id: item.id,
+          variation_id: item.variationId,
+          quantity: item.quantity,
+        })),
+        ...deliveryDetails,
+        ...(customerLocation ?? {}),
+      });
+      setOrderItems({});
+      setCheckoutOpen(false);
+      setCartOpen(false);
+      setTrackingRefreshKey((current) => current + 1);
+      setCheckoutSuccess({
+        orderNumber: String(result.record.order_number),
+        total: Number(result.record.total),
+        message: result.message,
+        paymentLabel: paymentMethods?.find((method) => method.code === selectedPaymentMethod)?.label ?? selectedPaymentMethod,
+      });
+    } catch (cause) {
+      setCheckoutError(cause instanceof Error ? cause.message : "Unable to complete the sandbox checkout.");
+    } finally {
+      setCheckoutBusy(false);
+    }
+  }
+
+  function useCurrentLocation() {
+    setCustomerLocationError(null);
+    if (!navigator.geolocation) {
+      setCustomerLocationError("This browser does not support location services.");
+      return;
+    }
+    if (!window.isSecureContext) {
+      setCustomerLocationError("Your browser requires a secure HTTPS connection to share location.");
+      return;
+    }
+    setLocatingCustomer(true);
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setCustomerLocation({ latitude: coords.latitude, longitude: coords.longitude });
+        setLocatingCustomer(false);
+      },
+      (cause) => {
+        setCustomerLocationError(cause.code === 1
+          ? "Location permission was denied. You can continue without showing your pin on the tracking map."
+          : "Unable to get your current location. You can continue without it.");
+        setLocatingCustomer(false);
+      },
+      { enableHighAccuracy: true, maximumAge: 60000, timeout: 20000 },
+    );
   }
 
   return (
@@ -359,7 +502,10 @@ export function AccountDashboard() {
                     </div>
                   )}
                   <div className={tw("customer-cart-subtotal")}><span>Subtotal</span><strong>{formatMoney(cartSubtotal)}</strong></div>
-                  <p className={tw("customer-cart-note")}>Cart selections are temporary. Checkout is not connected yet.</p>
+                  <p className={tw("customer-cart-note")}>Sandbox checkout only. No real payment will be collected.</p>
+                  {cartItems.length > 0 && !checkoutOpen && (
+                    <button className={tw("customer-cart-checkout")} onClick={() => void openCheckout()} type="button">Continue to checkout</button>
+                  )}
                   {location.pathname !== "/account/browse-order" && (
                     <Link className={tw("customer-cart-browse")} onClick={() => setCartOpen(false)} to="/account/browse-order">Browse order <span aria-hidden="true">→</span></Link>
                   )}
@@ -383,6 +529,161 @@ export function AccountDashboard() {
             </div>
           </div>
         </header>
+
+        {(checkoutOpen || checkoutSuccess) && (
+          <div className={tw("customer-checkout-backdrop")}>
+            <section
+              aria-labelledby="customer-checkout-title"
+              aria-modal="true"
+              className={tw(`customer-checkout-modal ${checkoutSuccess ? "customer-checkout-modal-confirmation" : ""}`)}
+              role="dialog"
+            >
+              {checkoutSuccess ? (
+                <div className={tw("customer-order-confirmation")}>
+                  <button
+                    aria-label="Close order confirmation"
+                    className={tw("customer-checkout-close")}
+                    onClick={() => setCheckoutSuccess(null)}
+                    type="button"
+                  >×</button>
+                  <span aria-hidden="true" className={tw("customer-confirmation-icon")}>
+                    <svg fill="none" viewBox="0 0 32 32"><path d="m8 16 5 5L24 10" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" /></svg>
+                  </span>
+                  <p className={tw("dashboard-section-kicker")}>ORDER CONFIRMED</p>
+                  <h2 id="customer-checkout-title">Thank you for your order.</h2>
+                  <p className={tw("customer-confirmation-copy")}>Your delivery order has been saved. Here is your confirmation for reference.</p>
+                  <div className={tw("customer-confirmation-receipt")}>
+                    <div><span>Order number</span><strong>{checkoutSuccess.orderNumber}</strong></div>
+                    <div><span>Payment method</span><strong>{checkoutSuccess.paymentLabel}</strong></div>
+                    <div><span>Order total</span><strong>{formatMoney(checkoutSuccess.total)}</strong></div>
+                  </div>
+                  <div className={tw("customer-sandbox-notice")} role="status">
+                    <strong>Sandbox payment · No charge made</strong>
+                    <span>{checkoutSuccess.message}</span>
+                  </div>
+                  <div className={tw("customer-confirmation-actions")}>
+                    <button className={tw("customer-confirmation-button")} onClick={() => { setCheckoutSuccess(null); navigate("/account/orders"); }} type="button">Track your delivery</button>
+                    <button className={tw("customer-confirmation-secondary")} onClick={() => setCheckoutSuccess(null)} type="button">Continue browsing</button>
+                  </div>
+                </div>
+              ) : (
+                <form className={tw("customer-checkout-dialog-form")} onSubmit={(event) => void submitCheckout(event)}>
+                  <div className={tw("customer-checkout-modal-header")}>
+                    <div>
+                      <p className={tw("dashboard-section-kicker")}>DELIVERY ORDER</p>
+                      <h2 id="customer-checkout-title">Checkout</h2>
+                      <p>Almost there. Confirm where to deliver your order.</p>
+                    </div>
+                    <button
+                      aria-label="Close checkout"
+                      className={tw("customer-checkout-close")}
+                      disabled={checkoutBusy}
+                      onClick={() => { setCheckoutOpen(false); setCheckoutError(null); }}
+                      type="button"
+                    >×</button>
+                  </div>
+                  <div className={tw("customer-checkout-steps")} aria-label="Checkout progress">
+                    <span className={tw("customer-checkout-step-complete")}><i>1</i> Cart</span>
+                    <span className={tw("customer-checkout-step-active")}><i>2</i> Delivery & payment</span>
+                    <span><i>3</i> Confirmation</span>
+                  </div>
+                  <div className={tw("customer-checkout-modal-body")}>
+                    <div className={tw("customer-checkout-details")}>
+                      <section className={tw("customer-checkout-section")}>
+                        <div className={tw("customer-checkout-section-heading")}>
+                          <span>01</span>
+                          <div><h3>Contact & delivery</h3><p>We’ll use these details for this delivery.</p></div>
+                        </div>
+                        <div className={tw("customer-checkout-form-grid")}>
+                          <label className={tw("customer-checkout-field")}><span>Recipient name</span><input autoComplete="name" onChange={(event) => setDeliveryDetails((current) => ({ ...current, recipient_name: event.target.value }))} required value={deliveryDetails.recipient_name} /></label>
+                          <label className={tw("customer-checkout-field")}><span>Phone number</span><input autoComplete="tel" onChange={(event) => setDeliveryDetails((current) => ({ ...current, phone: event.target.value }))} required value={deliveryDetails.phone} /></label>
+                          <label className={tw("customer-checkout-field-wide customer-checkout-field")}><span>Street address</span><input autoComplete="street-address" onChange={(event) => setDeliveryDetails((current) => ({ ...current, address_line: event.target.value }))} required value={deliveryDetails.address_line} /></label>
+                          <label className={tw("customer-checkout-field-wide customer-checkout-field")}><span>Apartment, unit, etc. <small>Optional</small></span><input onChange={(event) => setDeliveryDetails((current) => ({ ...current, address_line_2: event.target.value }))} value={deliveryDetails.address_line_2} /></label>
+                          <label className={tw("customer-checkout-field")}><span>City</span><input autoComplete="address-level2" onChange={(event) => setDeliveryDetails((current) => ({ ...current, city: event.target.value }))} required value={deliveryDetails.city} /></label>
+                          <label className={tw("customer-checkout-field")}><span>Region <small>Optional</small></span><input autoComplete="address-level1" onChange={(event) => setDeliveryDetails((current) => ({ ...current, region: event.target.value }))} value={deliveryDetails.region} /></label>
+                          <label className={tw("customer-checkout-field-wide customer-checkout-field")}><span>Postal code <small>Optional</small></span><input autoComplete="postal-code" onChange={(event) => setDeliveryDetails((current) => ({ ...current, postal_code: event.target.value }))} value={deliveryDetails.postal_code} /></label>
+                          <label className={tw("customer-checkout-field-wide customer-checkout-field")}><span>Delivery instructions <small>Optional</small></span><textarea onChange={(event) => setDeliveryDetails((current) => ({ ...current, delivery_notes: event.target.value }))} value={deliveryDetails.delivery_notes} /></label>
+                        </div>
+                        <div className={tw("customer-location-consent")}>
+                          <div>
+                            <strong>Show my location on the delivery map</strong>
+                            <span>{customerLocation ? "Your approximate pin is saved with this delivery and used for tracking." : "Optional. Add a pin to see your location alongside the driver."}</span>
+                          </div>
+                          {customerLocation ? (
+                            <button onClick={() => setCustomerLocation(null)} type="button">Remove pin</button>
+                          ) : (
+                            <button disabled={locatingCustomer} onClick={useCurrentLocation} type="button">{locatingCustomer ? "Finding location…" : "Use my location"}</button>
+                          )}
+                          {customerLocationError && <p role="alert">{customerLocationError}</p>}
+                        </div>
+                      </section>
+                      <section className={tw("customer-checkout-section")}>
+                        <div className={tw("customer-checkout-section-heading")}>
+                          <span>02</span>
+                          <div><h3>Payment method</h3><p>Choose a simulated test method.</p></div>
+                        </div>
+                        {loadingPaymentMethods ? (
+                          <p className={tw("customer-payment-loading")} role="status">Loading available methods…</p>
+                        ) : paymentMethods?.length ? (
+                          <div className={tw("customer-payment-options")}>
+                            {paymentMethods.map((method) => (
+                              <label className={tw(`customer-payment-option ${selectedPaymentMethod === method.code ? "customer-payment-option-selected" : ""}`)} key={method.code}>
+                                <input
+                                  checked={selectedPaymentMethod === method.code}
+                                  name="payment_method"
+                                  onChange={() => setSelectedPaymentMethod(method.code)}
+                                  required
+                                  type="radio"
+                                  value={method.code}
+                                />
+                                <span className={tw("customer-payment-radio")} aria-hidden="true" />
+                                <span className={tw("customer-payment-option-copy")}><strong>{method.label}</strong><small>Sandbox test · no real charge</small></span>
+                                <span aria-hidden="true" className={tw("customer-payment-test-tag")}>TEST</span>
+                              </label>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className={tw("customer-payment-loading")} role="alert">
+                            {checkoutError ?? "No payment methods are enabled. Please contact the café."}
+                          </p>
+                        )}
+                      </section>
+                    </div>
+                    <aside className={tw("customer-checkout-summary")}>
+                      <p className={tw("dashboard-section-kicker")}>YOUR ORDER</p>
+                      <h3>Order summary <span>{cartCount} item{cartCount === 1 ? "" : "s"}</span></h3>
+                      <div className={tw("customer-checkout-summary-items")}>
+                        {cartItems.map((item) => (
+                          <div className={tw("customer-checkout-summary-item")} key={item.key}>
+                            <span className={tw("customer-checkout-summary-quantity")}>{item.quantity}</span>
+                            <span className={tw("customer-checkout-summary-name")}>
+                              <strong>{item.name}</strong>
+                              <small>{item.sizeName || "Standard"}</small>
+                            </span>
+                            <strong>{formatMoney(item.quantity * item.price)}</strong>
+                          </div>
+                        ))}
+                      </div>
+                      <div className={tw("customer-checkout-summary-total")}><span>Items subtotal</span><strong>{formatMoney(cartSubtotal)}</strong></div>
+                      <p className={tw("customer-checkout-summary-note")}>Delivery fee and applicable taxes are calculated securely when you place the order.</p>
+                      <div className={tw("customer-sandbox-notice")}>
+                        <strong>Sandbox mode</strong>
+                        <span>This is a simulated checkout. No real payment will be taken.</span>
+                      </div>
+                      {checkoutError && <p className={tw("customer-checkout-error")} role="alert">{checkoutError}</p>}
+                      <button
+                        className={tw("customer-confirmation-button")}
+                        disabled={checkoutBusy || loadingPaymentMethods || !selectedPaymentMethod || !paymentMethods?.length}
+                        type="submit"
+                      >{checkoutBusy ? "Placing your order…" : "Place test order"} <span aria-hidden="true">→</span></button>
+                      <p className={tw("customer-checkout-secure-note")}>Prices and availability are verified by the café when submitted.</p>
+                    </aside>
+                  </div>
+                </form>
+              )}
+            </section>
+          </div>
+        )}
 
         {cartFlight && (
           <div
@@ -459,12 +760,28 @@ export function AccountDashboard() {
 
           {location.pathname === "/account/orders" && (
             <section className={tw("dashboard-panel dashboard-page-panel")}>
+              {trackingError && <p className={tw("dashboard-error")} role="alert">{trackingError}</p>}
+              {customerDeliveries.length > 0 ? (
+                <div className={tw("customer-delivery-tracking-list")}>
+                  <div className={tw("customer-tracking-intro")}>
+                    <p className={tw("dashboard-section-kicker")}>ON THE WAY</p>
+                    <h2 className={tw("dashboard-panel-title")}>Your active delivery</h2>
+                    <p>Driver location refreshes automatically while they are sharing it.</p>
+                  </div>
+                  {customerDeliveries.map((delivery) => (
+                    <Suspense fallback={<div className={tw("delivery-map-loading")} role="status">Loading delivery map…</div>} key={delivery.id}>
+                      <DeliveryTrackingMap delivery={delivery} />
+                    </Suspense>
+                  ))}
+                </div>
+              ) : (
               <div className={tw("dashboard-empty-state")}>
                 <span className={tw("dashboard-empty-icon")} aria-hidden="true">☕</span>
-                <h2 className={tw("dashboard-empty-title")}>Order history is not connected yet</h2>
-                <p className={tw("dashboard-empty-description")}>You can browse the live menu and add products to your cart. Saved orders will appear here once checkout is connected.</p>
+                <h2 className={tw("dashboard-empty-title")}>No active deliveries</h2>
+                <p className={tw("dashboard-empty-description")}>When your order is out for delivery, you’ll see the driver’s live location and an approximate arrival estimate here.</p>
                 <Link className={tw("dashboard-order-button")} to="/account/browse-order">Browse the menu <span aria-hidden="true">→</span></Link>
               </div>
+              )}
             </section>
           )}
 
