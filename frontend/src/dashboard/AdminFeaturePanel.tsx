@@ -50,10 +50,7 @@ const resourceConfigs: Record<string, ResourceConfig[]> = {
     { title: "Customer discounts", resource: "discounts", fields: [{ name: "name", label: "Discount name", required: true }, { name: "code", label: "Discount code" }, { name: "type", label: "Discount type", type: "select", required: true, options: () => [{ value: "fixed", label: "Fixed amount" }, { value: "percentage", label: "Percentage" }] }, { name: "value", label: "Value (₱ or percent)", type: "number", min: "0", required: true }, { name: "starts_at", label: "Starts at", type: "date" }, { name: "ends_at", label: "Ends at", type: "date" }, { name: "is_active", label: "Active", type: "checkbox" }], columns: ["name", "code", "type", "value", "starts_at", "ends_at", "is_active"] },
     { title: "Customer order history", resource: "orders", fields: [], columns: ["customer_id", "order_number", "order_type", "status", "total", "created_at"], readOnly: true },
   ],
-  delivery: [
-    { title: "Saved delivery addresses", resource: "addresses", fields: [{ name: "customer_id", label: "Customer", type: "select", required: true, options: optionsFrom("customers", (record) => String(record.name)) }, { name: "label", label: "Label" }, { name: "recipient_name", label: "Recipient name", required: true }, { name: "phone", label: "Phone", required: true }, { name: "address_line", label: "Address", required: true }, { name: "address_line_2", label: "Address line 2" }, { name: "city", label: "City", required: true }, { name: "region", label: "Region" }, { name: "postal_code", label: "Postal code" }, { name: "delivery_notes", label: "Delivery notes", type: "textarea" }, { name: "is_default", label: "Default address", type: "checkbox" }], columns: ["customer_id", "label", "recipient_name", "phone", "city"] },
-    { title: "Delivery orders", resource: "deliveries", fields: [{ name: "order_id", label: "Order", type: "select", required: true, options: optionsFrom("orders", (record) => String(record.order_number)) }, { name: "customer_address_id", label: "Saved address (optional)", type: "select", options: (workspace) => [{ value: "", label: "No linked saved address" }, ...optionsFrom("addresses", (record) => String(record.address_line))(workspace)] }, { name: "recipient_name", label: "Recipient", required: true }, { name: "recipient_phone", label: "Phone", required: true }, { name: "address_snapshot", label: "Delivery address", type: "textarea", required: true }, { name: "delivery_fee", label: "Delivery fee (₱)", type: "number", min: "0" }, { name: "status", label: "Status", type: "select", options: () => ["pending", "preparing", "ready", "assigned", "out_for_delivery", "delivered", "cancelled"].map((value) => ({ value, label: value.replace(/_/g, " ") })) }, { name: "rider_id", label: "Rider", type: "select", options: (workspace) => [{ value: "", label: "Unassigned" }, ...(workspace.records.staff ?? []).map((record) => ({ value: String(record.id), label: String(record.name) }))] }, { name: "delivery_notes", label: "Delivery notes", type: "textarea" }], columns: ["order_id", "status", "recipient_name", "recipient_phone", "delivery_fee"] },
-  ],
+  delivery: [],
   inventory: [
     { title: "Ingredients & stock levels", resource: "ingredients", fields: [{ name: "name", label: "Ingredient", required: true }, { name: "sku", label: "SKU" }, { name: "unit", label: "Base unit", type: "select", required: true, options: () => ["g", "kg", "ml", "l", "each"].map((value) => ({ value, label: value })) }, { name: "low_stock_threshold", label: "Low-stock threshold", type: "number", min: "0" }, { name: "cost_per_unit", label: "Cost per unit (₱)", type: "number", min: "0" }, { name: "is_active", label: "Active", type: "checkbox" }], columns: ["name", "sku", "unit", "quantity_on_hand", "low_stock_threshold", "cost_per_unit"] },
     { title: "Stock ledger", resource: "inventory-transactions", fields: [{ name: "ingredient_id", label: "Ingredient", type: "select", required: true, options: optionsFrom("ingredients", (record) => `${record.name} (${record.quantity_on_hand} ${record.unit})`) }, { name: "type", label: "Movement", type: "select", required: true, options: () => [{ value: "stock_in", label: "Stock in" }, { value: "adjustment", label: "Set balance" }, { value: "waste", label: "Waste" }, { value: "return", label: "Return" }] }, { name: "quantity", label: "Quantity", type: "number", min: "0.001", required: true }, { name: "reference", label: "Reference" }, { name: "notes", label: "Notes" }], columns: ["ingredient_id", "type", "quantity_change", "quantity_after", "reference", "created_at"], createOnly: true },
@@ -936,15 +933,150 @@ export function AdminFeaturePanel({
   if (section === "sales") return <OrderManagement onRefresh={onRefresh} showOrderCreator showOrders={false} workspace={workspace} />;
   if (section === "payments") return <OrderManagement onRefresh={onRefresh} showOrderCreator={false} showOrders workspace={workspace} />;
   if (section === "menu") return <MenuCatalog onRefresh={onRefresh} workspace={workspace} />;
+  if (section === "delivery") return (
+    <div className={tw("admin-sections")}>
+      <DeliveryManagementPanel onRefresh={onRefresh} workspace={workspace} />
+      {currentUserId !== undefined && <RiderLocationPanel currentUserId={currentUserId} workspace={workspace} />}
+    </div>
+  );
   const configs = resourceConfigs[section] ?? [];
   if (configs.length === 0) return null;
   return (
     <div className={tw("admin-sections")}>
       {configs.map((config) => <ResourcePanel config={config} key={config.resource} onRefresh={onRefresh} workspace={workspace} />)}
       {section === "settings" && <PaymentMethodPanel onRefresh={onRefresh} workspace={workspace} />}
-      {section === "delivery" && currentUserId !== undefined && <RiderLocationPanel currentUserId={currentUserId} workspace={workspace} />}
       {section === "team" && <RolePermissionPanel onRefresh={onRefresh} workspace={workspace} />}
     </div>
+  );
+}
+
+const deliveryStatusChoices: Record<string, string[]> = {
+  pending: ["pending", "preparing", "cancelled"],
+  preparing: ["preparing", "ready", "cancelled"],
+  ready: ["ready", "assigned", "cancelled"],
+  assigned: ["assigned", "out_for_delivery", "cancelled"],
+  out_for_delivery: ["out_for_delivery", "delivered", "cancelled"],
+  delivered: ["delivered"],
+  cancelled: ["cancelled"],
+};
+
+function DeliveryManagementPanel({ workspace, onRefresh }: { workspace: AdminWorkspace; onRefresh: () => Promise<void> }) {
+  const deliveries = workspace.records.deliveries ?? [];
+  const orders = workspace.records.orders ?? [];
+  const [changes, setChanges] = useState<Record<number, { status: string; rider_id: string }>>({});
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [successId, setSuccessId] = useState<number | null>(null);
+
+  function defaultSelection(delivery: AdminRecord) {
+    return {
+      status: String(delivery.status),
+      rider_id: delivery.rider_id === null || delivery.rider_id === undefined ? "" : String(delivery.rider_id),
+    };
+  }
+
+  function selectionFor(delivery: AdminRecord) {
+    return changes[delivery.id] ?? defaultSelection(delivery);
+  }
+
+  async function saveDelivery(delivery: AdminRecord) {
+    const selected = selectionFor(delivery);
+    if (selected.status === "assigned" && !selected.rider_id) {
+      setError("Choose a driver before assigning this delivery.");
+      return;
+    }
+
+    setBusyId(delivery.id);
+    setError(null);
+    setSuccessId(null);
+    try {
+      await adminApi.update("deliveries", delivery.id, {
+        status: selected.status,
+        rider_id: selected.rider_id ? Number(selected.rider_id) : null,
+      });
+      await onRefresh();
+      setChanges((current) => {
+        const updated = { ...current };
+        delete updated[delivery.id];
+        return updated;
+      });
+      setSuccessId(delivery.id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to update this delivery.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <section aria-label="Delivery orders" className={tw("dashboard-panel admin-resource-panel")}>
+      <div className={tw("dashboard-panel-heading")}>
+        <div>
+          <p className={tw("dashboard-section-kicker")}>DELIVERY QUEUE</p>
+          <h2 className={tw("dashboard-panel-title")}>Manage deliveries</h2>
+        </div>
+        <span className={tw("admin-count")}>{deliveries.length} order{deliveries.length === 1 ? "" : "s"}</span>
+      </div>
+      <p className={tw("admin-form-help")}>Delivery orders appear here automatically after customer checkout. Update the status and assign a driver; customer addresses are managed under Customers.</p>
+      {error && <p className={tw("admin-form-error")} role="alert">{error}</p>}
+      <div className={tw("admin-delivery-list")}>
+        {deliveries.map((delivery) => {
+          const selected = selectionFor(delivery);
+          const order = orders.find((record) => record.id === Number(delivery.order_id));
+          const currentStatus = String(delivery.status);
+          const options = deliveryStatusChoices[currentStatus] ?? [currentStatus];
+          const hasChanges = selected.status !== currentStatus
+            || selected.rider_id !== (delivery.rider_id === null || delivery.rider_id === undefined ? "" : String(delivery.rider_id));
+          const rider = (workspace.records["delivery-riders"] ?? []).find((record) => record.id === Number(delivery.rider_id));
+          return (
+            <article className={tw("admin-delivery-card")} key={delivery.id}>
+              <div className={tw("admin-delivery-card-heading")}>
+                <div>
+                  <p className={tw("dashboard-section-kicker")}>{String(order?.order_number ?? `Order #${delivery.order_id}`)}</p>
+                  <h3>{String(delivery.recipient_name)}</h3>
+                </div>
+                <span className={tw("admin-delivery-card-total")}>{money(Number(order?.total ?? 0))}</span>
+              </div>
+              <div className={tw("admin-delivery-address")}>
+                <strong>Deliver to</strong>
+                <span>{String(delivery.address_snapshot)}</span>
+                {delivery.delivery_notes && <small>Note: {String(delivery.delivery_notes)}</small>}
+                <a href={`tel:${String(delivery.recipient_phone)}`}>{String(delivery.recipient_phone)}</a>
+              </div>
+              <div className={tw("admin-delivery-controls")}>
+                <label className={tw("admin-field")}>
+                  <span>Status</span>
+                  <select
+                    onChange={(event) => setChanges((current) => ({ ...current, [delivery.id]: { ...(current[delivery.id] ?? defaultSelection(delivery)), status: event.target.value } }))}
+                    value={selected.status}
+                  >
+                    {options.map((status) => <option key={status} value={status}>{status.replace(/_/g, " ")}</option>)}
+                  </select>
+                </label>
+                <label className={tw("admin-field")}>
+                  <span>Driver</span>
+                  <select
+                    onChange={(event) => setChanges((current) => ({ ...current, [delivery.id]: { ...(current[delivery.id] ?? defaultSelection(delivery)), rider_id: event.target.value } }))}
+                    value={selected.rider_id}
+                  >
+                    <option value="">Unassigned</option>
+                    {(workspace.records["delivery-riders"] ?? []).map((staff) => <option key={staff.id} value={staff.id}>{String(staff.name)}</option>)}
+                  </select>
+                </label>
+                <button
+                  className={tw("admin-primary-button admin-delivery-save")}
+                  disabled={busyId !== null || !hasChanges}
+                  onClick={() => void saveDelivery(delivery)}
+                  type="button"
+                >{busyId === delivery.id ? "Saving…" : successId === delivery.id ? "Saved" : "Save"}</button>
+              </div>
+              {rider && <p className={tw("admin-delivery-current-driver")}>Currently assigned to {String(rider.name)}</p>}
+            </article>
+          );
+        })}
+        {deliveries.length === 0 && <p className={tw("admin-delivery-empty")}>No delivery orders yet. Customer delivery checkouts will appear here.</p>}
+      </div>
+    </section>
   );
 }
 

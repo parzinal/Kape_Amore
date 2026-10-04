@@ -89,6 +89,11 @@ class AdminWorkspaceTest extends TestCase
 
         $manager = User::factory()->create();
         $manager->roles()->attach(Role::where('name', 'manager')->firstOrFail());
+        $this->actingAs($manager)->getJson('/api/admin/workspace')
+            ->assertOk()
+            ->assertJsonPath('records.delivery-riders.0.id', $manager->id)
+            ->assertJsonPath('records.delivery-riders.0.name', $manager->name)
+            ->assertJsonMissingPath('records.staff');
         $this->actingAs($manager)->postJson('/api/admin/records/categories', ['name' => 'Coffee'])->assertCreated();
         $this->postJson('/api/admin/records/staff', [
             'name' => 'Unauthorized Staff',

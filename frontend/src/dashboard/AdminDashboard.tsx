@@ -41,7 +41,7 @@ const details: Record<string, { eyebrow: string; title: string; description: str
   "/admin/tables": { eyebrow: "DINE IN", title: "Tables", description: "Manage table capacity, seating areas, and availability." },
   "/admin/payments": { eyebrow: "CHECKOUT", title: "Payments", description: "Accept split payments and record payment refunds." },
   "/admin/inventory": { eyebrow: "STOCK CONTROL", title: "Inventory", description: "Maintain ingredient quantities and a traceable stock ledger." },
-  "/admin/delivery": { eyebrow: "FULFILMENT", title: "Delivery", description: "Manage customer addresses, delivery assignments, and statuses." },
+  "/admin/delivery": { eyebrow: "FULFILMENT", title: "Delivery", description: "Manage delivery orders, assign drivers, and follow customer deliveries." },
   "/admin/customers": { eyebrow: "GUESTS", title: "Customers", description: "Manage profiles, addresses, order history, and loyalty adjustments." },
   "/admin/team": { eyebrow: "STAFF ACCESS", title: "Team & access", description: "Provision staff accounts and review administrative activity." },
   "/admin/reports": { eyebrow: "BUSINESS INSIGHTS", title: "Reports", description: "Analyze recorded sales, payment methods, and best-selling items." },

@@ -128,6 +128,15 @@ class AdminWorkspaceController extends Controller
             'recipes' => $this->rows('recipes'),
             'recipe-items' => $this->rows('recipe_items'),
             'deliveries' => $this->rows('deliveries'),
+            'delivery-riders' => DB::table('users')
+                ->join('role_user', 'role_user.user_id', '=', 'users.id')
+                ->join('roles', 'roles.id', '=', 'role_user.role_id')
+                ->where('users.is_active', true)
+                ->whereIn('roles.name', ['manager', 'cashier', 'staff'])
+                ->select('users.id', 'users.name')
+                ->distinct()
+                ->orderBy('users.name')
+                ->get(),
             'discounts' => $this->rows('discounts'),
             'settings' => $this->rows('settings'),
             'staff' => $this->staffRows(),
@@ -148,6 +157,7 @@ class AdminWorkspaceController extends Controller
             if (! $can('payments.manage', 'reports.view')) unset($records['payments'], $records['refunds']);
             if (! $can('inventory.manage', 'reports.view')) unset($records['ingredients'], $records['inventory-transactions'], $records['recipes'], $records['recipe-items']);
             if (! $can('delivery.manage', 'reports.view')) unset($records['deliveries']);
+            if (! $can('delivery.manage')) unset($records['delivery-riders']);
             if (! $can('customers.manage', 'pos.use')) unset($records['discounts']);
             if (! $can('customers.manage')) unset($records['loyalty']);
             if (! $can('admin.manage')) unset($records['settings'], $records['staff'], $records['roles'], $records['permissions'], $records['role-permissions'], $records['activity']);
