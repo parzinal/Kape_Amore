@@ -5,7 +5,7 @@ import { tw } from "../tw";
 import { DashboardSidebar } from "./DashboardSidebar";
 import type { DashboardNavItem } from "./DashboardSidebar";
 import { AdminFeaturePanel } from "./AdminFeaturePanel";
-import { adminApi } from "./adminApi";
+import { adminApi, adminImageUrl } from "./adminApi";
 import type { AdminReport, AdminWorkspace } from "./adminApi";
 
 const navigation: DashboardNavItem[] = [
@@ -49,7 +49,7 @@ const details: Record<string, { eyebrow: string; title: string; description: str
 };
 
 function money(value: number): string {
-  return new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(value);
+  return `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function shortDate(value: string): string {
@@ -190,6 +190,14 @@ function Overview({ workspace }: { workspace: AdminWorkspace }) {
   const lowStock = (workspace.records.ingredients ?? []).filter(
     (ingredient) => Number(ingredient.quantity_on_hand) <= Number(ingredient.low_stock_threshold),
   );
+  const topProducts = summary.top_products ?? [];
+  const [featuredIndex, setFeaturedIndex] = useState(0);
+  useEffect(() => {
+    if (topProducts.length < 2) return;
+    const timer = window.setInterval(() => setFeaturedIndex((current) => (current + 1) % topProducts.length), 4500);
+    return () => window.clearInterval(timer);
+  }, [topProducts.length]);
+  const featuredProduct = topProducts[featuredIndex] ?? topProducts[0];
 
   return (
     <div className={tw("admin-overview-page")}>
@@ -225,6 +233,37 @@ function Overview({ workspace }: { workspace: AdminWorkspace }) {
           <div className={tw("admin-card-heading")}><div><h2>Performance</h2><p>Completed sales · last 7 days</p></div><span>This Week⌄</span></div>
           <OrdersChart previousRows={summary.previous_weekly_sales ?? []} rows={summary.weekly_sales ?? []} />
         </section>
+      </div>
+      <div className={tw("admin-overview-insights")}>
+      <section className={tw("admin-top-products")} aria-label="Top three best-selling products">
+        <div className={tw("admin-card-heading")}><div><h2>Top 3 best products</h2><p>Most ordered products · images switch automatically</p></div><span>BEST SELLERS</span></div>
+        {featuredProduct ? (
+          <div className={tw("admin-top-product-feature")}>
+            {featuredProduct.image_path ? <img alt="" src={adminImageUrl(featuredProduct.image_path)} /> : <div className={tw("admin-top-product-placeholder")}>☕</div>}
+            <div><p className={tw("dashboard-eyebrow")}>NO. {featuredIndex + 1} MOST ORDERED</p><h3>{featuredProduct.product_name}</h3><strong>{Number(featuredProduct.quantity)} orders</strong><span>{money(Number(featuredProduct.sales))} in sales</span></div>
+          </div>
+        ) : <p className={tw("admin-empty-copy")}>Complete an order to see your best products here.</p>}
+        <div className={tw("admin-top-product-dots")} aria-label="Best product slides">{topProducts.map((product, index) => <button aria-label={`Show ${product.product_name}`} aria-pressed={index === featuredIndex} className={tw(index === featuredIndex ? "is-active" : "")} key={`${product.product_id}-${product.product_name}`} onClick={() => setFeaturedIndex(index)} type="button" />)}</div>
+      </section>
+      <section className={tw("admin-order-type-card")} aria-label="Orders by type">
+        <div className={tw("admin-card-heading")}><div><h2>Order mix</h2><p>Dine in vs takeout</p></div><span>THIS PERIOD</span></div>
+        {(() => {
+          const mix = (summary.orders_by_type ?? []).filter((row) => ["dine_in", "takeout"].includes(String(row.order_type)));
+          const total = mix.reduce((sum, row) => sum + Number(row.count), 0);
+          let offset = 0;
+          const colors = ["#a94d34", "#d5a477"];
+          const segments = mix.map((row, index) => {
+            const value = total ? Number(row.count) / total * 100 : 0;
+            const segment = `${colors[index % colors.length]} ${offset}% ${offset + value}%`;
+            offset += value;
+            return { ...row, value, segment };
+          });
+          return <>
+            <div className={tw("admin-pie-wrap")}><div className={tw("admin-pie-chart")} style={{ background: total ? `conic-gradient(${segments.map((segment) => segment.segment).join(", ")})` : "#eadfd2" }}><div>{total}<small>orders</small></div></div></div>
+            <div className={tw("admin-pie-legend")}>{segments.map((segment, index) => <div key={String(segment.order_type)}><i style={{ background: colors[index % colors.length] }} /><span>{String(segment.order_type).replace("_", " ")}</span><strong>{Number(segment.count)}</strong></div>)}</div>
+          </>;
+        })()}
+      </section>
       </div>
       <section className={tw("admin-order-list")}>
         <div className={tw("admin-order-heading")}><div><h2>Order List</h2><p>Recent café orders and their current status</p></div>

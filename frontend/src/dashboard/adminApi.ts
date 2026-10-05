@@ -12,6 +12,7 @@ export type AdminWorkspace = {
     weekly_sales: Array<{ day: string; sales: number; orders: number }>;
     previous_weekly_sales: Array<{ day: string; sales: number; orders: number }>;
     recent_sales: AdminRecord[];
+    top_products: Array<{ product_id: number | null; product_name: string; image_path: string | null; quantity: number; sales: number }>;
   };
   records: Record<string, AdminRecord[]>;
 };

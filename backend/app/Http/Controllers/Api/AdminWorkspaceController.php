@@ -176,6 +176,15 @@ class AdminWorkspaceController extends Controller
                 'weekly_sales' => $weeklySales,
                 'previous_weekly_sales' => $previousWeeklySales,
                 'recent_sales' => $orders->whereDate('created_at', $today)->latest()->limit(10)->get(),
+                'top_products' => DB::table('order_items')
+                    ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
+                    ->join('orders', 'orders.id', '=', 'order_items.order_id')
+                    ->select('order_items.product_id', 'order_items.product_name', 'products.image_path', DB::raw('SUM(order_items.quantity) as quantity'), DB::raw('SUM(order_items.line_total) as sales'))
+                    ->where('orders.status', 'completed')
+                    ->groupBy('order_items.product_id', 'order_items.product_name', 'products.image_path')
+                    ->orderByDesc('quantity')
+                    ->limit(3)
+                    ->get(),
             ],
             'records' => $records,
         ]);
