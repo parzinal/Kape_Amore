@@ -236,9 +236,10 @@ class AdminWorkspaceController extends Controller
                 'group' => 'required|string|max:80',
                 'value' => 'present',
             ]);
+            $settingValue = $this->paymentMethodSettingValue($request, $values['value'], $values['key']);
             $setting = DB::table('settings')->updateOrInsert(
                 ['key' => $values['key']],
-                ['group' => $values['group'], 'value' => json_encode($values['value'], JSON_THROW_ON_ERROR), 'updated_by' => $user->id, 'created_at' => now(), 'updated_at' => now()],
+                ['group' => $values['group'], 'value' => json_encode($settingValue, JSON_THROW_ON_ERROR), 'updated_by' => $user->id, 'created_at' => now(), 'updated_at' => now()],
             );
 
             return response()->json(['record' => DB::table('settings')->where('key', $values['key'])->first()], $setting ? 201 : 200);
@@ -306,8 +307,10 @@ class AdminWorkspaceController extends Controller
         }
         if ($resource === 'settings') {
             $values = $request->validate(['value' => 'present', 'group' => 'sometimes|string|max:80']);
+            $settingKey = DB::table('settings')->where('id', $id)->value('key');
+            $settingValue = $this->paymentMethodSettingValue($request, $values['value'], $settingKey);
             $updated = DB::table('settings')->where('id', $id)->update([
-                'value' => json_encode($values['value'], JSON_THROW_ON_ERROR),
+                'value' => json_encode($settingValue, JSON_THROW_ON_ERROR),
                 'group' => $values['group'] ?? DB::table('settings')->where('id', $id)->value('group'),
                 'updated_by' => $user->id,
                 'updated_at' => now(),
@@ -1200,6 +1203,34 @@ class AdminWorkspaceController extends Controller
         }
 
         return json_decode($value, true) ?? $default;
+    }
+
+    private function paymentMethodSettingValue(Request $request, mixed $value, mixed $key): mixed
+    {
+        if ($key !== 'payment_methods') {
+            return $value;
+        }
+        if (is_string($value)) {
+            $value = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
+        }
+        if (! is_array($value)) {
+            throw ValidationException::withMessages(['value' => ['Payment methods must be a JSON array.']]);
+        }
+
+        foreach ($value as $index => &$method) {
+            if (! is_array($method) || ! isset($method['code'])) {
+                continue;
+            }
+            $file = $request->file("payment_image_{$method['code']}");
+            if ($file) {
+                $request->validate([
+                    "payment_image_{$method['code']}" => 'image|mimes:jpg,jpeg,png,webp|max:5120',
+                ]);
+                $method['image_url'] = $file->store('payment-methods', 'public');
+            }
+        }
+
+        return $value;
     }
 
     private function authorizeAdmin(Request $request, string $permission = 'admin.manage'): User

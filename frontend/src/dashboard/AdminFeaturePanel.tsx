@@ -31,6 +31,64 @@ function productImageUrl(path: string): string {
   return adminImageUrl(path);
 }
 
+function PaymentMethodCard({ method, image }: { method: PaymentMethod; image?: File | null }) {
+  const [uploadedImageUrl, setUploadedImageUrl] = useState("");
+  useEffect(() => {
+    if (!image) {
+      setUploadedImageUrl("");
+      return;
+    }
+    const objectUrl = URL.createObjectURL(image);
+    setUploadedImageUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [image]);
+  const imageUrl = uploadedImageUrl || (method.image_url ? adminImageUrl(method.image_url) : "");
+  const isCard = method.code === "card";
+  const isWallet = method.code === "e_wallet";
+  const isCash = method.code === "cash";
+  if (isCash) {
+    return (
+      <div className={tw("admin-payment-cash-preview")}>
+        {imageUrl ? (
+          <img alt="" className={tw("admin-payment-cash-image")} src={imageUrl} />
+        ) : (
+          <>
+            <span className={tw("admin-payment-card-symbol")}>₱</span>
+            <strong>Cash</strong>
+            <small>PAY ON DELIVERY</small>
+          </>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className={tw(`admin-payment-visual-card ${isCard ? "admin-payment-visual-card-credit" : isWallet ? "admin-payment-visual-card-wallet" : "admin-payment-visual-card-generic"}`)}>
+      {imageUrl ? (
+        <img alt="" className={tw("admin-payment-visual-image")} src={imageUrl} />
+      ) : isCard ? (
+        <>
+          <span className={tw("admin-payment-card-chip")} />
+          <span className={tw("admin-payment-card-contactless")}>)))</span>
+          <strong>VISA</strong>
+          <small>•••• •••• •••• 1234</small>
+        </>
+      ) : isWallet ? (
+        <>
+          <span className={tw("admin-payment-qr-sample")} aria-label="Sample QR code" />
+          <strong>GCash / Maya</strong>
+          <small>SCAN TO PAY · SAMPLE</small>
+        </>
+      ) : (
+        <>
+          <span className={tw("admin-payment-card-symbol")}>₱</span>
+          <strong>{method.label || "Payment"}</strong>
+          <small>PAYMENT METHOD</small>
+        </>
+      )}
+    </div>
+  );
+}
+
 const optionsFrom = (key: string, label: (record: AdminRecord) => string) =>
   (workspace: AdminWorkspace): SelectOption[] =>
     (workspace.records[key] ?? []).map((record) => ({ value: String(record.id), label: label(record) }));
@@ -838,6 +896,7 @@ function PaymentMethodPanel({ workspace, onRefresh }: { workspace: AdminWorkspac
     return configured.length > 0 ? configured : paymentMethodChoices.map((method) => ({ ...method }));
   };
   const [methods, setMethods] = useState<PaymentMethod[]>(readMethods);
+  const [paymentImages, setPaymentImages] = useState<Record<string, File | null>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -863,10 +922,18 @@ function PaymentMethodPanel({ workspace, onRefresh }: { workspace: AdminWorkspac
     }
     setBusy(true);
     try {
-      const payload = { key: "payment_methods", group: "payments", value: methods };
+      const payload = new FormData();
+      payload.append("key", "payment_methods");
+      payload.append("group", "payments");
+      payload.append("value", JSON.stringify(methods));
+      paymentMethodChoices.forEach((choice) => {
+        const image = paymentImages[choice.code];
+        if (image) payload.append(`payment_image_${choice.code}`, image);
+      });
       if (setting) await adminApi.update("settings", setting.id, payload);
       else await adminApi.create("settings", payload);
       await onRefresh();
+      setPaymentImages({});
       setSuccess("Sandbox payment methods saved.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to save payment methods.");
@@ -890,6 +957,7 @@ function PaymentMethodPanel({ workspace, onRefresh }: { workspace: AdminWorkspac
           const method = methods.find((entry) => entry.code === choice.code) ?? choice;
           return (
             <div className={tw("admin-payment-method-row")} key={choice.code}>
+              <PaymentMethodCard image={paymentImages[choice.code]} method={method} />
               <label className={tw("admin-field")}>
                 <span>{choice.label}</span>
                 <input
@@ -897,6 +965,26 @@ function PaymentMethodPanel({ workspace, onRefresh }: { workspace: AdminWorkspac
                   onChange={(event) => updateMethod(choice.code, { label: event.target.value })}
                   value={method.label}
                 />
+              </label>
+              <label className={tw("admin-field")}>
+                <span>Account / payment number</span>
+                <input
+                  maxLength={80}
+                  onChange={(event) => updateMethod(choice.code, { account_number: event.target.value })}
+                  placeholder={choice.code === "cash" ? "Not required" : "e.g. 0917 123 4567"}
+                  value={method.account_number ?? ""}
+                />
+              </label>
+              <label className={tw("admin-field")}>
+                <span>Payment image <small>Optional</small></span>
+                <input
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(event) => setPaymentImages((current) => ({ ...current, [choice.code]: event.target.files?.[0] ?? null }))}
+                  type="file"
+                />
+                {(paymentImages[choice.code] || method.image_url) && (
+                  <small>{paymentImages[choice.code]?.name ?? "Current image will be used"}</small>
+                )}
               </label>
               <label className={tw("admin-field-checkbox")}>
                 <input
@@ -1040,7 +1128,7 @@ function DeliveryManagementPanel({ workspace, onRefresh }: { workspace: AdminWor
               <div className={tw("admin-delivery-address")}>
                 <strong>Deliver to</strong>
                 <span>{String(delivery.address_snapshot)}</span>
-                {delivery.delivery_notes && <small>Note: {String(delivery.delivery_notes)}</small>}
+                {Boolean(delivery.delivery_notes) && <small>Note: {String(delivery.delivery_notes)}</small>}
                 <a href={`tel:${String(delivery.recipient_phone)}`}>{String(delivery.recipient_phone)}</a>
               </div>
               <div className={tw("admin-delivery-controls")}>

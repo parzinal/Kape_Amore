@@ -244,6 +244,8 @@ class CustomerCheckoutController extends Controller
                         'code' => $default['code'],
                         'label' => trim($method['label']),
                         'enabled' => (bool) ($method['enabled'] ?? false),
+                        'account_number' => is_string($method['account_number'] ?? null) ? trim($method['account_number']) : '',
+                        'image_url' => is_string($method['image_url'] ?? null) ? trim($method['image_url']) : '',
                     ];
                 }
             }

@@ -69,6 +69,19 @@ function productDisplayImage(product: AdminRecord): string {
   return imagePath ? adminImageUrl(imagePath) : "";
 }
 
+function PaymentBrand({ method }: { method: PaymentMethod }) {
+  if (method.image_url) {
+    return <img alt="" className={tw("customer-payment-brand-image")} src={adminImageUrl(method.image_url)} />;
+  }
+  if (method.code === "card") {
+    return <span aria-hidden="true" className={tw("customer-payment-brand customer-payment-brand-card")}>VISA<br /><small>••••</small></span>;
+  }
+  if (method.code === "e_wallet") {
+    return <span aria-hidden="true" className={tw("customer-payment-brand-ewallet")}><b>GCash</b><b>Maya</b></span>;
+  }
+  return <span aria-hidden="true" className={tw("customer-payment-brand customer-payment-brand-generic")}>₱</span>;
+}
+
 function ActivityChart() {
   return (
     <section className={tw("dashboard-panel dashboard-activity")} aria-labelledby="activity-title">
@@ -637,7 +650,9 @@ export function AccountDashboard() {
                                   value={method.code}
                                 />
                                 <span className={tw("customer-payment-radio")} aria-hidden="true" />
+                                <PaymentBrand method={method} />
                                 <span className={tw("customer-payment-option-copy")}><strong>{method.label}</strong><small>Sandbox test · no real charge</small></span>
+                                {method.account_number && <span className={tw("customer-payment-account-number")}>{method.account_number}</span>}
                                 <span aria-hidden="true" className={tw("customer-payment-test-tag")}>TEST</span>
                               </label>
                             ))}

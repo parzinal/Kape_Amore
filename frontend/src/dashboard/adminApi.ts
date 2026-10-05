@@ -24,7 +24,13 @@ export type CustomerCatalog = {
   };
 };
 
-export type PaymentMethod = { code: string; label: string; enabled: boolean };
+export type PaymentMethod = {
+  code: string;
+  label: string;
+  enabled: boolean;
+  account_number?: string;
+  image_url?: string;
+};
 
 export type CustomerCheckoutInput = {
   payment_method: string;
@@ -102,6 +108,8 @@ export function paymentMethodsFromSettings(settings: AdminRecord[]): PaymentMeth
       code: defaultMethod.code,
       label: typeof method.label === "string" && method.label.trim() ? method.label.trim() : defaultMethod.label,
       enabled: method.enabled === true,
+      account_number: typeof method.account_number === "string" ? method.account_number.trim() : "",
+      image_url: typeof method.image_url === "string" ? method.image_url.trim() : "",
     };
   });
 }
