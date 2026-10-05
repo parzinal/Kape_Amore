@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { tw } from "./tw";
 import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
@@ -11,6 +11,7 @@ import {
 import { RequireAuth } from "./auth/RouteGuards";
 import { AdminDashboard } from "./dashboard/AdminDashboard";
 import { AccountDashboard } from "./dashboard/AccountDashboard";
+import { customerApi, adminImageUrl } from "./dashboard/adminApi";
 
 const drinks = [
   {
@@ -44,6 +45,12 @@ const drinks = [
 
 function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [landingImages, setLandingImages] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    void customerApi.landingImages().then((response) => setLandingImages(response.images)).catch(() => undefined);
+  }, []);
+  const landingImage = (slot: string, fallback: string) => landingImages[slot] ? adminImageUrl(landingImages[slot]) : fallback;
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -77,7 +84,7 @@ function LandingPage() {
       </header>
 
       <section className={tw("hero")} id="home">
-        <div className={tw("hero-image")} role="img" aria-label="A freshly made coffee on a café table" />
+        <div className={tw("hero-image")} role="img" aria-label="A freshly made coffee on a café table" style={{ backgroundImage: `url("${landingImage("hero", "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1600&q=90")}")` }} />
         <div className={tw("hero-copy")}>
           <p className={tw("hero-eyebrow")}><span className={tw("eyebrow-line")} /> COFFEE FOR EVERYDAY MOMENTS</p>
           <h1 className={tw("hero-title")}>Your daily<br />cup of <em className={tw("hero-title-accent")}>comfort.</em></h1>
@@ -110,7 +117,7 @@ function LandingPage() {
           {drinks.map((drink, index) => (
             <article className={tw("menu-card")} key={drink.name}>
               <div className={tw("menu-card-image")}>
-                <img className={tw("menu-card-img")} src={drink.image} alt={drink.imageAlt} loading="lazy" />
+                <img className={tw("menu-card-img")} src={landingImage(`menu_${index + 1}`, drink.image)} alt={drink.imageAlt} loading="lazy" />
                 <span className={tw("menu-number")}>0{index + 1}</span>
               </div>
               <div className={tw("menu-card-details")}>
@@ -135,7 +142,7 @@ function LandingPage() {
       </div>
 
       <section className={tw("story-section")} id="story">
-        <div className={tw("story-image")} role="img" aria-label="Coffee being prepared by hand" />
+        <div className={tw("story-image")} role="img" aria-label="Coffee being prepared by hand" style={{ backgroundImage: `url("${landingImage("story", "https://images.unsplash.com/photo-1498804103079-a825c2f9f8c3?auto=format&fit=crop&w=1400&q=90")}")` }} />
         <div className={tw("story-copy")}>
           <p className={tw("story-eyebrow")}><span className={tw("eyebrow-line")} /> THE KAPE AMORE WAY</p>
           <h2 className={tw("story-title")}>A good cup<br />brings us <em className={tw("story-title-accent")}>together.</em></h2>

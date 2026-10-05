@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from "react";
 import { tw } from "../tw";
 import { adminApi, adminImageUrl, paymentMethodChoices, paymentMethodsFromSettings } from "./adminApi";
 import type { AdminRecord, AdminWorkspace, PaymentMethod } from "./adminApi";
+import { DeliveryTrackingMap } from "./DeliveryTrackingMap";
 
 type SelectOption = { value: string; label: string };
 type ProductSizeDraft = { id?: number; name: string; sku: string; price: string; is_available: boolean };
@@ -103,7 +104,6 @@ const resourceConfigs: Record<string, ResourceConfig[]> = {
   ],
   customers: [
     { title: "Customer profiles", resource: "customers", fields: [{ name: "name", label: "Full name", required: true }, { name: "phone", label: "Phone" }, { name: "email", label: "Email", type: "email" }, { name: "notes", label: "Notes", type: "textarea" }], columns: ["name", "phone", "email", "loyalty_points"] },
-    { title: "Customer addresses", resource: "addresses", fields: [{ name: "customer_id", label: "Customer", type: "select", required: true, options: optionsFrom("customers", (record) => String(record.name)) }, { name: "label", label: "Label" }, { name: "recipient_name", label: "Recipient name", required: true }, { name: "phone", label: "Phone", required: true }, { name: "address_line", label: "Address", required: true }, { name: "address_line_2", label: "Address line 2" }, { name: "city", label: "City", required: true }, { name: "region", label: "Region" }, { name: "postal_code", label: "Postal code" }, { name: "delivery_notes", label: "Delivery notes", type: "textarea" }, { name: "is_default", label: "Default address", type: "checkbox" }], columns: ["customer_id", "label", "recipient_name", "phone", "city", "is_default"] },
     { title: "Loyalty points adjustments", resource: "loyalty", fields: [{ name: "customer_id", label: "Customer", type: "select", required: true, options: optionsFrom("customers", (record) => String(record.name)) }, { name: "points_change", label: "Points (use a negative value to redeem)", type: "number", required: true }, { name: "type", label: "Transaction type", type: "select", required: true, options: () => ["earned", "redeemed", "adjustment", "expired"].map((value) => ({ value, label: value })) }, { name: "notes", label: "Notes", type: "textarea" }], columns: ["customer_id", "points_change", "type", "notes"], createOnly: true },
     { title: "Customer discounts", resource: "discounts", fields: [{ name: "name", label: "Discount name", required: true }, { name: "code", label: "Discount code" }, { name: "type", label: "Discount type", type: "select", required: true, options: () => [{ value: "fixed", label: "Fixed amount" }, { value: "percentage", label: "Percentage" }] }, { name: "value", label: "Value (₱ or percent)", type: "number", min: "0", required: true }, { name: "starts_at", label: "Starts at", type: "date" }, { name: "ends_at", label: "Ends at", type: "date" }, { name: "is_active", label: "Active", type: "checkbox" }], columns: ["name", "code", "type", "value", "starts_at", "ends_at", "is_active"] },
     { title: "Customer order history", resource: "orders", fields: [], columns: ["customer_id", "order_number", "order_type", "status", "total", "created_at"], readOnly: true },
@@ -114,8 +114,7 @@ const resourceConfigs: Record<string, ResourceConfig[]> = {
     { title: "Stock ledger", resource: "inventory-transactions", fields: [{ name: "ingredient_id", label: "Ingredient", type: "select", required: true, options: optionsFrom("ingredients", (record) => `${record.name} (${record.quantity_on_hand} ${record.unit})`) }, { name: "type", label: "Movement", type: "select", required: true, options: () => [{ value: "stock_in", label: "Stock in" }, { value: "adjustment", label: "Set balance" }, { value: "waste", label: "Waste" }, { value: "return", label: "Return" }] }, { name: "quantity", label: "Quantity", type: "number", min: "0.001", required: true }, { name: "reference", label: "Reference" }, { name: "notes", label: "Notes" }], columns: ["ingredient_id", "type", "quantity_change", "quantity_after", "reference", "created_at"], createOnly: true },
   ],
   team: [
-    { title: "Team members", resource: "staff", fields: [{ name: "name", label: "Full name", required: true }, { name: "email", label: "Work email", type: "email", required: true }, { name: "password", label: "Temporary password (minimum 12 characters)", type: "password", required: true }, { name: "role", label: "What can this person do?", type: "select", required: true, options: () => ["admin", "manager", "cashier", "staff"].map((value) => ({ value, label: value === "admin" ? "Administrator — everything" : value === "manager" ? "Manager — daily operations" : value === "cashier" ? "Cashier — sales and payments" : "Staff — basic access" })) }], columns: ["name", "email", "role", "is_active", "created_at"] },
-    { title: "Permission definitions", resource: "permissions", fields: [{ name: "name", label: "Permission key", required: true }, { name: "display_name", label: "Display name", required: true }], columns: ["name", "display_name"] },
+    { title: "Team members", resource: "staff", fields: [{ name: "name", label: "Full name", required: true }, { name: "email", label: "Work email", type: "email", required: true }, { name: "password", label: "Temporary password (minimum 12 characters)", type: "password", required: true }, { name: "role", label: "What can this person do?", type: "select", required: true, options: () => ["admin", "manager", "cashier", "driver", "staff"].map((value) => ({ value, label: value === "admin" ? "Administrator — everything" : value === "manager" ? "Manager — daily operations" : value === "cashier" ? "Cashier — sales and payments" : value === "driver" ? "Driver — assigned deliveries and live location" : "Staff — basic access" })) }], columns: ["name", "email", "role", "is_active", "created_at"] },
     { title: "Activity log", resource: "activity", fields: [], columns: ["user_id", "action", "subject_type", "subject_id", "ip_address", "created_at"], readOnly: true },
   ],
   settings: [
@@ -285,10 +284,14 @@ function ResourcePanel({
       if (field.type === "checkbox") {
         payload[field.name] = Boolean(value);
       } else if (typeof value === "string" && value !== "") {
-        if (field.type === "number" || field.type === "select") payload[field.name] = Number(value);
+        if (field.type === "number") payload[field.name] = Number(value);
+        else if (field.type === "select" && field.name === "role") payload[field.name] = value;
+        else if (field.type === "select") payload[field.name] = Number(value);
         else if (field.name === "value") {
           try { payload[field.name] = JSON.parse(value); } catch { payload[field.name] = value; }
         } else payload[field.name] = value;
+      } else if (editing && config.resource === "customers" && ["phone", "email", "notes"].includes(field.name)) {
+        payload[field.name] = null;
       } else if (field.required) {
         payload[field.name] = value;
       }
@@ -352,7 +355,8 @@ function ResourcePanel({
       <div className={tw("dashboard-panel-heading")}>
         <div>
           <p className={tw("dashboard-section-kicker")}>MANAGE RECORDS</p>
-          <h2 className={tw("dashboard-panel-title")}>{config.title}</h2>
+          <h2 className={tw("dashboard-panel-title")}>{editing ? `Edit ${config.title.toLowerCase().replace(/s$/, "")}` : config.title}</h2>
+          {editing && <p className={tw("admin-form-help")}>Update the details below, then choose Save changes.</p>}
         </div>
         <span className={tw("admin-count")}>{records.length} records</span>
       </div>
@@ -433,7 +437,7 @@ function ResourcePanel({
           )}
           {error && <p className={tw("admin-form-error")} role="alert">{error}</p>}
           <div className={tw("admin-form-actions")}>
-            <button className={tw("admin-primary-button")} disabled={busy} type="submit">{busy ? "Saving…" : editing && !config.createOnly ? "Save changes" : "Add record"}</button>
+            <button className={tw("admin-primary-button")} disabled={busy} type="submit">{busy ? "Saving…" : editing && !config.createOnly ? "Save changes" : config.resource === "customers" ? "Add customer" : "Add record"}</button>
             {editing && !config.createOnly && <button className={tw("admin-secondary-button")} onClick={cancelEdit} type="button">Cancel</button>}
           </div>
         </form>
@@ -466,64 +470,6 @@ function ResourcePanel({
   );
 }
 
-function RolePermissionPanel({ workspace, onRefresh }: { workspace: AdminWorkspace; onRefresh: () => Promise<void> }) {
-  const [roleId, setRoleId] = useState("");
-  const [permissionIds, setPermissionIds] = useState<number[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const roles = workspace.records.roles ?? [];
-  const permissions = workspace.records.permissions ?? [];
-  const assignments = workspace.records["role-permissions"] ?? [];
-  const roleDescriptions: Record<string, string> = {
-    admin: "Full access to settings, staff, reports, and café operations.",
-    manager: "Manage daily operations, orders, menu, and team workflows.",
-    cashier: "Create orders, take payments, and help customers at the counter.",
-    staff: "Limited access for day-to-day café support.",
-  };
-
-  useEffect(() => {
-    setPermissionIds(assignments.filter((item) => item.role_id === Number(roleId)).map((item) => Number(item.permission_id)));
-  }, [roleId, workspace]);
-
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      await adminApi.assignPermissions(Number(roleId), permissionIds);
-      await onRefresh();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to save role permissions.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className={tw("dashboard-panel admin-resource-panel")} aria-label="Role permissions">
-      <div className={tw("dashboard-panel-heading")}><div><p className={tw("dashboard-section-kicker")}>ACCESS CONTROL</p><h2 className={tw("dashboard-panel-title")}>Choose what each role can access</h2></div></div>
-      <p className={tw("admin-form-help")}>Select a role, review its access, and save. Team members inherit these permissions when they sign in.</p>
-      <div className={tw("admin-role-cards")}>{roles.map((role) => {
-        const key = String(role.name ?? "").toLowerCase();
-        const selected = roleId === String(role.id);
-        const assignedCount = assignments.filter((item) => item.role_id === role.id).length;
-        return <button className={tw(`admin-role-card ${selected ? "admin-role-card-selected" : ""}`)} key={role.id} onClick={() => setRoleId(String(role.id))} type="button">
-          <span className={tw("admin-role-avatar")}>{String(role.display_name ?? role.name ?? "?").slice(0, 1).toUpperCase()}</span>
-          <strong>{String(role.display_name ?? role.name)}</strong>
-          <small>{roleDescriptions[key] ?? "Custom access for this team role."}</small>
-          <em>{assignedCount} permission{assignedCount === 1 ? "" : "s"}</em>
-        </button>;
-      })}</div>
-      <form className={tw("admin-assignment-form")} onSubmit={(event) => void save(event)}>
-        <label className={tw("admin-field")}><span>Role</span><select className={tw("admin-input")} onChange={(event) => setRoleId(event.target.value)} required value={roleId}><option value="">Select role…</option>{roles.map((role) => <option key={role.id} value={role.id}>{String(role.display_name)}</option>)}</select></label>
-        <div className={tw("admin-checkbox-list")}>{permissions.map((permission) => <label className={tw("admin-assignment-checkbox")} key={permission.id}><input checked={permissionIds.includes(permission.id)} onChange={(event) => setPermissionIds((current) => event.target.checked ? [...current, permission.id] : current.filter((id) => id !== permission.id))} type="checkbox" /><span><strong>{String(permission.display_name)}</strong><small>{String(permission.name).replace(/\./g, " · ")}</small></span></label>)}{permissions.length === 0 && <p className={tw("admin-empty-copy")}>No access options are available yet.</p>}</div>
-        {error && <p className={tw("admin-form-error")} role="alert">{error}</p>}
-        <button className={tw("admin-primary-button")} disabled={busy || !roleId} type="submit">{busy ? "Saving…" : "Save role permissions"}</button>
-      </form>
-    </section>
-  );
-}
-
 function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }: {
   workspace: AdminWorkspace;
   onRefresh: () => Promise<void>;
@@ -534,7 +480,6 @@ function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }:
   const [lines, setLines] = useState([emptyLine()]);
   const [orderType, setOrderType] = useState("dine_in");
   const [customerId, setCustomerId] = useState("");
-  const [addressId, setAddressId] = useState("");
   const [tableIds, setTableIds] = useState<number[]>([]);
   const [notes, setNotes] = useState("");
   const [orderTables, setOrderTables] = useState<Record<number, string[]>>({});
@@ -552,7 +497,6 @@ function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }:
   const variations = workspace.records.variations ?? [];
   const orders = workspace.records.orders ?? [];
   const customers = workspace.records.customers ?? [];
-  const addresses = workspace.records.addresses ?? [];
   const discounts = workspace.records.discounts ?? [];
   const modifierOptions = workspace.records["modifier-options"] ?? [];
   const modifierGroups = workspace.records["modifier-groups"] ?? [];
@@ -600,8 +544,7 @@ function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }:
     : 0;
   const taxEstimate = subtotal * settingNumber("tax_rate") / 100;
   const serviceEstimate = subtotal * settingNumber("service_charge_rate") / 100;
-  const deliveryEstimate = orderType === "delivery" ? settingNumber("delivery_fee") : 0;
-  const totalEstimate = Math.max(0, subtotal - discountTotal + taxEstimate + serviceEstimate + deliveryEstimate);
+  const totalEstimate = Math.max(0, subtotal - discountTotal + taxEstimate + serviceEstimate);
 
   function addProduct(product: AdminRecord) {
     const defaultSize = variations
@@ -622,7 +565,6 @@ function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }:
     setDiscountId("");
     setTendered("");
     setCustomerId("");
-    setAddressId("");
   }
 
   async function createOrder(event: FormEvent<HTMLFormElement>) {
@@ -644,7 +586,6 @@ function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }:
         const result = await adminApi.create("orders", {
           order_type: orderType,
           customer_id: customerId ? Number(customerId) : null,
-          address_id: orderType === "delivery" ? Number(addressId) : undefined,
           status: canTakePayment ? "confirmed" : "draft",
           notes: notes || null,
           discount_id: discountId ? Number(discountId) : null,
@@ -788,11 +729,10 @@ function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }:
         <aside className={tw("admin-pos-order")} aria-label="Order details">
           <div className={tw("admin-pos-order-heading")}><div><h2>Order Detail</h2><span>{lines.filter((line) => line.product_id).reduce((sum, line) => sum + Number(line.quantity), 0)} items selected</span></div><button aria-label="Clear order" className={tw("admin-pos-clear")} disabled={!lines.some((line) => line.product_id) || Boolean(pendingCheckoutOrder)} onClick={resetCart} type="button">Clear all</button></div>
           <section className={tw("admin-pos-customer")}><h3>Customer Information</h3>
-            <label className={tw("admin-pos-customer-field")}><span>Customer name</span><select disabled={Boolean(pendingCheckoutOrder)} onChange={(event) => { setCustomerId(event.target.value); setAddressId(""); }} value={customerId}><option value="">Walk-in customer</option>{customers.map((item) => <option key={item.id} value={item.id}>{String(item.name)}</option>)}</select></label>
+            <label className={tw("admin-pos-customer-field")}><span>Customer name</span><select disabled={Boolean(pendingCheckoutOrder)} onChange={(event) => { setCustomerId(event.target.value);  }} value={customerId}><option value="">Walk-in customer</option>{customers.map((item) => <option key={item.id} value={item.id}>{String(item.name)}</option>)}</select></label>
             <div className={tw("admin-pos-select-row")}>
-              <label className={tw("admin-pos-customer-field")}><span>Order type</span><select disabled={Boolean(pendingCheckoutOrder)} onChange={(event) => { setOrderType(event.target.value); setTableIds([]); }} value={orderType}>{[["dine_in", "Dine in"], ["takeout", "Takeout"], ["delivery", "Delivery"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+              <label className={tw("admin-pos-customer-field")}><span>Order type</span><select disabled={Boolean(pendingCheckoutOrder)} onChange={(event) => { setOrderType(event.target.value); setTableIds([]); }} value={orderType}>{[["dine_in", "Dine in"], ["takeout", "Takeout"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
               {orderType === "dine_in" && <label className={tw("admin-pos-customer-field")}><span>Select table</span><select disabled={Boolean(pendingCheckoutOrder)} onChange={(event) => setTableIds(event.target.value ? [Number(event.target.value)] : [])} value={tableIds[0] ?? ""}><option value="">Choose table</option>{tables.filter((table) => (table.status === "available" || tableIds.includes(table.id)) && table.is_active).map((table) => <option key={table.id} value={table.id}>{String(table.name)} · {String(table.capacity)} seats</option>)}</select></label>}
-              {orderType === "delivery" && <label className={tw("admin-pos-customer-field")}><span>Delivery address</span><select disabled={Boolean(pendingCheckoutOrder)} onChange={(event) => setAddressId(event.target.value)} required value={addressId}><option value="">Choose address</option>{addresses.filter((item) => !customerId || item.customer_id === Number(customerId)).map((item) => <option key={item.id} value={item.id}>{String(item.address_line)}, {String(item.city)}</option>)}</select></label>}
             </div>
           </section>
 
@@ -831,7 +771,6 @@ function OrderManagement({ workspace, onRefresh, showOrderCreator, showOrders }:
           <label className={tw("admin-pos-notes")}><span>Order notes</span><input disabled={Boolean(pendingCheckoutOrder)} onChange={(event) => setNotes(event.target.value)} placeholder="Optional notes for this order" value={notes} /></label>
           <div className={tw("admin-pos-totals")}><div><span>Subtotal</span><strong>{money(subtotal)}</strong></div>{selectedDiscount && <div><span>Discount · {String(selectedDiscount.name)}</span><strong>−{money(discountTotal)}</strong></div>}
             {workspace.records.settings && <><div><span>Tax ({settingNumber("tax_rate")}%)</span><strong>{money(taxEstimate)}</strong></div>{serviceEstimate > 0 && <div><span>Service charge</span><strong>{money(serviceEstimate)}</strong></div>}</>}
-            {orderType === "delivery" && <div><span>Delivery fee (estimate)</span><strong>{money(deliveryEstimate)}</strong></div>}
             <div className={tw("admin-pos-grand-total")}><span>{pendingCheckoutOrder ? `Order total · ${String(pendingCheckoutOrder.order_number)}` : "Total"}</span><strong>{money(Number(pendingCheckoutOrder?.total ?? totalEstimate))}</strong></div>
           </div>
           {workspace.records.payments !== undefined && <div className={tw("admin-pos-tender")}><label><span>Payment method</span><select disabled={Boolean(pendingCheckoutOrder) || availablePaymentMethods.length === 0} onChange={(event) => setPaymentMethod(event.target.value)} value={selectedPaymentMethod}>{availablePaymentMethods.map((method) => <option key={method.code} value={method.code}>{method.label}</option>)}</select></label>
@@ -1025,6 +964,48 @@ function PaymentMethodPanel({ workspace, onRefresh }: { workspace: AdminWorkspac
   );
 }
 
+function LandingImagesPanel({ workspace, onRefresh }: { workspace: AdminWorkspace; onRefresh: () => Promise<void> }) {
+  const setting = workspace.records.settings?.find((record) => record.key === "featured_images");
+  const saved = (() => { try { return setting?.value ? JSON.parse(String(setting.value)) as Record<string, string> : {}; } catch { return {}; } })();
+  const slots = [
+    ["hero", "Hero image", "Large image at the top of the homepage."],
+    ["story", "Story image", "Image beside the café story section."],
+    ["menu_1", "Menu image 1", "First featured menu card."],
+    ["menu_2", "Menu image 2", "Second featured menu card."],
+    ["menu_3", "Menu image 3", "Third featured menu card."],
+  ] as const;
+  const [files, setFiles] = useState<Record<string, File | null>>({});
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setBusy(true); setError(null); setMessage(null);
+    try {
+      const body = new FormData();
+      body.append("key", "featured_images");
+      body.append("group", "landing");
+      body.append("value", JSON.stringify(saved));
+      slots.forEach(([key]) => { const file = files[key]; if (file) body.append(`featured_image_${key}`, file); });
+      if (setting) await adminApi.update("settings", setting.id, body);
+      else await adminApi.create("settings", body);
+      await onRefresh(); setFiles({}); setMessage("Landing page images saved.");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save landing page images."); }
+    finally { setBusy(false); }
+  }
+
+  return <section className={tw("dashboard-panel admin-resource-panel")} aria-label="Landing page images">
+    <div className={tw("dashboard-panel-heading")}><div><p className={tw("dashboard-section-kicker")}>WEBSITE CONTENT</p><h2 className={tw("dashboard-panel-title")}>Featured images</h2></div></div>
+    <p className={tw("admin-form-help")}>Choose a replacement for any section, then save once. JPG, PNG, or WebP images up to 5 MB are supported.</p>
+    {error && <p className={tw("admin-form-error")} role="alert">{error}</p>}{message && <p className={tw("admin-success-toast")} role="status">{message}</p>}
+    <div className={tw("admin-landing-image-grid")}>{slots.map(([key, label, help]) => {
+      const file = files[key]; const preview = file ? URL.createObjectURL(file) : saved[key] ? adminImageUrl(saved[key]) : "";
+      return <label className={tw("admin-landing-image-card")} key={key}>{preview ? <img alt="" src={preview} /> : <span className={tw("admin-landing-image-empty")}>No image yet</span>}<strong>{label}</strong><small>{help}</small><input accept="image/jpeg,image/png,image/webp" onChange={(event) => setFiles((current) => ({ ...current, [key]: event.target.files?.[0] ?? null }))} type="file" /></label>;
+    })}</div>
+    <button className={tw("admin-primary-button")} disabled={busy} onClick={() => void save()} type="button">{busy ? "Saving…" : "Save landing images"}</button>
+  </section>;
+}
+
 export function AdminFeaturePanel({
   section,
   workspace,
@@ -1039,6 +1020,7 @@ export function AdminFeaturePanel({
   if (section === "sales") return <OrderManagement onRefresh={onRefresh} showOrderCreator showOrders={false} workspace={workspace} />;
   if (section === "payments") return <OrderManagement onRefresh={onRefresh} showOrderCreator={false} showOrders workspace={workspace} />;
   if (section === "menu") return <MenuCatalog onRefresh={onRefresh} workspace={workspace} />;
+  if (section === "landing") return <LandingImagesPanel onRefresh={onRefresh} workspace={workspace} />;
   if (section === "delivery") return (
     <div className={tw("admin-sections")}>
       <DeliveryManagementPanel onRefresh={onRefresh} workspace={workspace} />
@@ -1051,7 +1033,6 @@ export function AdminFeaturePanel({
     <div className={tw("admin-sections")}>
       {configs.map((config) => <ResourcePanel config={config} key={config.resource} onRefresh={onRefresh} workspace={workspace} />)}
       {section === "settings" && <PaymentMethodPanel onRefresh={onRefresh} workspace={workspace} />}
-      {section === "team" && <RolePermissionPanel onRefresh={onRefresh} workspace={workspace} />}
     </div>
   );
 }
@@ -1191,6 +1172,7 @@ function RiderLocationPanel({ workspace, currentUserId }: { workspace: AdminWork
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
+  const [liveLocations, setLiveLocations] = useState<Record<number, { latitude: number; longitude: number; updatedAt: string }>>({});
   const watchId = useRef<number | null>(null);
   const sendingLocation = useRef(false);
   const lastSentAt = useRef(0);
@@ -1237,7 +1219,12 @@ function RiderLocationPanel({ workspace, currentUserId }: { workspace: AdminWork
             accuracy: position.coords.accuracy,
           });
           lastSentAt.current = Date.now();
-          setLastUpdate(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" }));
+          const updatedAt = new Date();
+          setLiveLocations((current) => ({
+            ...current,
+            [deliveryId]: { latitude: position.coords.latitude, longitude: position.coords.longitude, updatedAt: updatedAt.toISOString() },
+          }));
+          setLastUpdate(updatedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" }));
           setMessage("Your live location is being shared with this delivery’s customer.");
         } catch (cause) {
           setError(cause instanceof Error ? cause.message : "Unable to update your location.");
@@ -1277,6 +1264,22 @@ function RiderLocationPanel({ workspace, currentUserId }: { workspace: AdminWork
         <p className={tw("admin-empty-copy")}>You have no deliveries assigned to you that are currently out for delivery.</p>
       ) : assignedDeliveries.map((delivery) => (
         <div className={tw("rider-location-row")} key={delivery.id}>
+          <div className={tw("rider-location-map")}>
+            <DeliveryTrackingMap delivery={{
+              id: delivery.id,
+              order_id: Number(delivery.order_id),
+              order_number: String((workspace.records.orders ?? []).find((order) => order.id === delivery.order_id)?.order_number ?? delivery.order_id),
+              status: String(delivery.status),
+              total: Number((workspace.records.orders ?? []).find((order) => order.id === delivery.order_id)?.total ?? 0),
+              rider_id: currentUserId,
+              rider_name: null,
+              rider_latitude: liveLocations[delivery.id]?.latitude ?? (typeof delivery.rider_latitude === "number" ? delivery.rider_latitude : null),
+              rider_longitude: liveLocations[delivery.id]?.longitude ?? (typeof delivery.rider_longitude === "number" ? delivery.rider_longitude : null),
+              rider_location_updated_at: liveLocations[delivery.id]?.updatedAt ?? (typeof delivery.rider_location_updated_at === "string" ? delivery.rider_location_updated_at : null),
+              customer_latitude: typeof delivery.customer_latitude === "number" ? delivery.customer_latitude : null,
+              customer_longitude: typeof delivery.customer_longitude === "number" ? delivery.customer_longitude : null,
+            }} />
+          </div>
           <div>
             <strong>Order {String((workspace.records.orders ?? []).find((order) => order.id === delivery.order_id)?.order_number ?? delivery.order_id)}</strong>
             <span>{String(delivery.recipient_name)} · {String(delivery.address_snapshot)}</span>

@@ -31,6 +31,7 @@ class CustomerCheckoutController extends Controller
     {
         $user = $this->customer($request);
         $data = $request->validate([
+            'order_type' => 'required|in:dine_in,takeout',
             'payment_method' => 'required|string|max:24',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|integer|exists:products,id',
@@ -38,9 +39,9 @@ class CustomerCheckoutController extends Controller
             'items.*.quantity' => 'required|integer|min:1|max:100',
             'recipient_name' => 'required|string|max:160',
             'phone' => 'required|string|max:30',
-            'address_line' => 'required|string|max:255',
+            'address_line' => 'nullable|string|max:255',
             'address_line_2' => 'nullable|string|max:255',
-            'city' => 'required|string|max:120',
+            'city' => 'nullable|string|max:120',
             'region' => 'nullable|string|max:120',
             'postal_code' => 'nullable|string|max:20',
             'delivery_notes' => 'nullable|string|max:1000',
@@ -72,25 +73,6 @@ class CustomerCheckoutController extends Controller
                 ]);
                 $customer = DB::table('customers')->find($customerId);
             }
-
-            $addressId = DB::table('customer_addresses')->insertGetId([
-                'customer_id' => $customer->id,
-                'label' => 'Delivery address',
-                'recipient_name' => $data['recipient_name'],
-                'phone' => $data['phone'],
-                'address_line' => $data['address_line'],
-                'address_line_2' => $data['address_line_2'] ?? null,
-                'city' => $data['city'],
-                'region' => $data['region'] ?? null,
-                'postal_code' => $data['postal_code'] ?? null,
-                'latitude' => $data['customer_latitude'] ?? null,
-                'longitude' => $data['customer_longitude'] ?? null,
-                'delivery_notes' => $data['delivery_notes'] ?? null,
-                'is_default' => ! DB::table('customer_addresses')->where('customer_id', $customer->id)->exists(),
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
-            $address = DB::table('customer_addresses')->find($addressId);
 
             $subtotal = 0.0;
             $taxRate = (float) $this->setting('tax_rate', 0);
@@ -146,11 +128,11 @@ class CustomerCheckoutController extends Controller
 
             $taxTotal = round(array_sum(array_column($items, 'tax_amount')), 2);
             $serviceCharge = round($subtotal * (float) $this->setting('service_charge_rate', 0) / 100, 2);
-            $deliveryFee = (float) $this->setting('delivery_fee', 0);
+            $deliveryFee = 0;
             $total = round($subtotal + $taxTotal + $serviceCharge + $deliveryFee, 2);
             $orderId = DB::table('orders')->insertGetId([
                 'order_number' => 'KA-'.now()->format('ymd').'-'.Str::upper(Str::random(6)),
-                'order_type' => 'delivery',
+                'order_type' => $data['order_type'],
                 'status' => 'confirmed',
                 'customer_id' => $customer->id,
                 'created_by' => $user->id,
@@ -171,18 +153,6 @@ class CustomerCheckoutController extends Controller
                 DB::table('order_items')->insert($item);
             }
 
-            DB::table('deliveries')->insert([
-                'order_id' => $orderId,
-                'customer_address_id' => $addressId,
-                'status' => 'pending',
-                'delivery_fee' => $deliveryFee,
-                'recipient_name' => $address->recipient_name,
-                'recipient_phone' => $address->phone,
-                'address_snapshot' => trim($address->address_line.' '.($address->address_line_2 ?? '').', '.$address->city.' '.($address->region ?? '').' '.($address->postal_code ?? '')),
-                'delivery_notes' => $address->delivery_notes,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
             DB::table('payments')->insert([
                 'order_id' => $orderId,
                 'method' => $paymentMethod['code'],

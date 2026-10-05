@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent, MouseEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -6,9 +6,7 @@ import type { DashboardNavItem } from "./DashboardSidebar";
 import { DashboardSidebar } from "./DashboardSidebar";
 import { tw } from "../tw";
 import { customerApi, adminImageUrl } from "./adminApi";
-import type { AdminRecord, CustomerCatalog, CustomerDeliveryTracking, PaymentMethod } from "./adminApi";
-
-const DeliveryTrackingMap = lazy(() => import("./DeliveryTrackingMap").then((module) => ({ default: module.DeliveryTrackingMap })));
+import type { AdminRecord, CustomerCatalog, PaymentMethod } from "./adminApi";
 
 const navigation: DashboardNavItem[] = [
   { label: "Overview", to: "/account", icon: "overview" },
@@ -27,7 +25,7 @@ const pageDetails: Record<string, { eyebrow: string; title: string; description:
   "/account/browse-order": {
     eyebrow: "ORDER ONLINE",
     title: "Find your next favorite.",
-    description: "Browse the café menu and add your picks to a delivery cart.",
+    description: "Browse the café menu and choose dine-in or takeout.",
   },
   "/account/orders": {
     eyebrow: "ORDER HISTORY",
@@ -93,7 +91,7 @@ function ActivityChart() {
         <span className={tw("dashboard-preview-tag")}>Sample preview</span>
       </div>
 
-      <p className={tw("dashboard-chart-note")}>Illustrative sample only. This chart is not connected to your saved delivery orders.</p>
+      <p className={tw("dashboard-chart-note")}>Illustrative sample only. This chart is not connected to your saved orders.</p>
 
       <div className={tw("dashboard-chart-wrap")}>
         <svg
@@ -155,13 +153,8 @@ export function AccountDashboard() {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [checkoutSuccess, setCheckoutSuccess] = useState<{ orderNumber: string; total: number; message: string; paymentLabel: string } | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("");
+  const [orderType, setOrderType] = useState<"takeout" | "dine_in">("takeout");
   const [checkoutBusy, setCheckoutBusy] = useState(false);
-  const [customerLocation, setCustomerLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [locatingCustomer, setLocatingCustomer] = useState(false);
-  const [customerLocationError, setCustomerLocationError] = useState<string | null>(null);
-  const [customerDeliveries, setCustomerDeliveries] = useState<CustomerDeliveryTracking[]>([]);
-  const [trackingError, setTrackingError] = useState<string | null>(null);
-  const [trackingRefreshKey, setTrackingRefreshKey] = useState(0);
   const [deliveryDetails, setDeliveryDetails] = useState({
     recipient_name: user?.name ?? "",
     phone: "",
@@ -219,29 +212,6 @@ export function AccountDashboard() {
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [checkoutBusy, checkoutOpen, checkoutSuccess]);
-
-  useEffect(() => {
-    if (location.pathname !== "/account/orders") return;
-
-    let active = true;
-    const loadDeliveries = async () => {
-      try {
-        const response = await customerApi.deliveries();
-        if (active) {
-          setCustomerDeliveries(response.deliveries);
-          setTrackingError(null);
-        }
-      } catch (cause) {
-        if (active) setTrackingError(cause instanceof Error ? cause.message : "Unable to load delivery tracking.");
-      }
-    };
-    void loadDeliveries();
-    const interval = window.setInterval(() => void loadDeliveries(), 5000);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
-  }, [location.pathname, trackingRefreshKey]);
 
   useEffect(() => {
     if (!cartFlight) return;
@@ -409,6 +379,7 @@ export function AccountDashboard() {
     setCheckoutBusy(true);
     try {
       const result = await customerApi.checkout({
+        order_type: orderType,
         payment_method: selectedPaymentMethod,
         items: cartItems.map((item) => ({
           product_id: item.id,
@@ -416,12 +387,10 @@ export function AccountDashboard() {
           quantity: item.quantity,
         })),
         ...deliveryDetails,
-        ...(customerLocation ?? {}),
       });
       setOrderItems({});
       setCheckoutOpen(false);
       setCartOpen(false);
-      setTrackingRefreshKey((current) => current + 1);
       setCheckoutSuccess({
         orderNumber: String(result.record.order_number),
         total: Number(result.record.total),
@@ -433,32 +402,6 @@ export function AccountDashboard() {
     } finally {
       setCheckoutBusy(false);
     }
-  }
-
-  function useCurrentLocation() {
-    setCustomerLocationError(null);
-    if (!navigator.geolocation) {
-      setCustomerLocationError("This browser does not support location services.");
-      return;
-    }
-    if (!window.isSecureContext) {
-      setCustomerLocationError("Your browser requires a secure HTTPS connection to share location.");
-      return;
-    }
-    setLocatingCustomer(true);
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        setCustomerLocation({ latitude: coords.latitude, longitude: coords.longitude });
-        setLocatingCustomer(false);
-      },
-      (cause) => {
-        setCustomerLocationError(cause.code === 1
-          ? "Location permission was denied. You can continue without showing your pin on the tracking map."
-          : "Unable to get your current location. You can continue without it.");
-        setLocatingCustomer(false);
-      },
-      { enableHighAccuracy: true, maximumAge: 60000, timeout: 20000 },
-    );
   }
 
   return (
@@ -564,7 +507,7 @@ export function AccountDashboard() {
                   </span>
                   <p className={tw("dashboard-section-kicker")}>ORDER CONFIRMED</p>
                   <h2 id="customer-checkout-title">Thank you for your order.</h2>
-                  <p className={tw("customer-confirmation-copy")}>Your delivery order has been saved. Here is your confirmation for reference.</p>
+                  <p className={tw("customer-confirmation-copy")}>Your café order has been saved. Here is your confirmation for reference.</p>
                   <div className={tw("customer-confirmation-receipt")}>
                     <div><span>Order number</span><strong>{checkoutSuccess.orderNumber}</strong></div>
                     <div><span>Payment method</span><strong>{checkoutSuccess.paymentLabel}</strong></div>
@@ -575,7 +518,7 @@ export function AccountDashboard() {
                     <span>{checkoutSuccess.message}</span>
                   </div>
                   <div className={tw("customer-confirmation-actions")}>
-                    <button className={tw("customer-confirmation-button")} onClick={() => { setCheckoutSuccess(null); navigate("/account/orders"); }} type="button">Track your delivery</button>
+                    <button className={tw("customer-confirmation-button")} onClick={() => { setCheckoutSuccess(null); navigate("/account/orders"); }} type="button">View my orders</button>
                     <button className={tw("customer-confirmation-secondary")} onClick={() => setCheckoutSuccess(null)} type="button">Continue browsing</button>
                   </div>
                 </div>
@@ -583,9 +526,9 @@ export function AccountDashboard() {
                 <form className={tw("customer-checkout-dialog-form")} onSubmit={(event) => void submitCheckout(event)}>
                   <div className={tw("customer-checkout-modal-header")}>
                     <div>
-                      <p className={tw("dashboard-section-kicker")}>DELIVERY ORDER</p>
+                      <p className={tw("dashboard-section-kicker")}>CAFÉ ORDER</p>
                       <h2 id="customer-checkout-title">Checkout</h2>
-                      <p>Almost there. Confirm where to deliver your order.</p>
+                      <p>Choose how you’ll enjoy your order.</p>
                     </div>
                     <button
                       aria-label="Close checkout"
@@ -597,7 +540,7 @@ export function AccountDashboard() {
                   </div>
                   <div className={tw("customer-checkout-steps")} aria-label="Checkout progress">
                     <span className={tw("customer-checkout-step-complete")}><i>1</i> Cart</span>
-                    <span className={tw("customer-checkout-step-active")}><i>2</i> Delivery & payment</span>
+                    <span className={tw("customer-checkout-step-active")}><i>2</i> Order & payment</span>
                     <span><i>3</i> Confirmation</span>
                   </div>
                   <div className={tw("customer-checkout-modal-body")}>
@@ -605,29 +548,12 @@ export function AccountDashboard() {
                       <section className={tw("customer-checkout-section")}>
                         <div className={tw("customer-checkout-section-heading")}>
                           <span>01</span>
-                          <div><h3>Contact & delivery</h3><p>We’ll use these details for this delivery.</p></div>
+                          <div><h3>Order type</h3><p>Choose dine-in or takeout.</p></div>
                         </div>
                         <div className={tw("customer-checkout-form-grid")}>
+                          <label className={tw("customer-checkout-field-wide customer-checkout-field")}><span>How would you like your order?</span><select onChange={(event) => setOrderType(event.target.value as "takeout" | "dine_in")} value={orderType}><option value="takeout">Takeout</option><option value="dine_in">Dine in</option></select></label>
                           <label className={tw("customer-checkout-field")}><span>Recipient name</span><input autoComplete="name" onChange={(event) => setDeliveryDetails((current) => ({ ...current, recipient_name: event.target.value }))} required value={deliveryDetails.recipient_name} /></label>
                           <label className={tw("customer-checkout-field")}><span>Phone number</span><input autoComplete="tel" onChange={(event) => setDeliveryDetails((current) => ({ ...current, phone: event.target.value }))} required value={deliveryDetails.phone} /></label>
-                          <label className={tw("customer-checkout-field-wide customer-checkout-field")}><span>Street address</span><input autoComplete="street-address" onChange={(event) => setDeliveryDetails((current) => ({ ...current, address_line: event.target.value }))} required value={deliveryDetails.address_line} /></label>
-                          <label className={tw("customer-checkout-field-wide customer-checkout-field")}><span>Apartment, unit, etc. <small>Optional</small></span><input onChange={(event) => setDeliveryDetails((current) => ({ ...current, address_line_2: event.target.value }))} value={deliveryDetails.address_line_2} /></label>
-                          <label className={tw("customer-checkout-field")}><span>City</span><input autoComplete="address-level2" onChange={(event) => setDeliveryDetails((current) => ({ ...current, city: event.target.value }))} required value={deliveryDetails.city} /></label>
-                          <label className={tw("customer-checkout-field")}><span>Region <small>Optional</small></span><input autoComplete="address-level1" onChange={(event) => setDeliveryDetails((current) => ({ ...current, region: event.target.value }))} value={deliveryDetails.region} /></label>
-                          <label className={tw("customer-checkout-field-wide customer-checkout-field")}><span>Postal code <small>Optional</small></span><input autoComplete="postal-code" onChange={(event) => setDeliveryDetails((current) => ({ ...current, postal_code: event.target.value }))} value={deliveryDetails.postal_code} /></label>
-                          <label className={tw("customer-checkout-field-wide customer-checkout-field")}><span>Delivery instructions <small>Optional</small></span><textarea onChange={(event) => setDeliveryDetails((current) => ({ ...current, delivery_notes: event.target.value }))} value={deliveryDetails.delivery_notes} /></label>
-                        </div>
-                        <div className={tw("customer-location-consent")}>
-                          <div>
-                            <strong>Show my location on the delivery map</strong>
-                            <span>{customerLocation ? "Your approximate pin is saved with this delivery and used for tracking." : "Optional. Add a pin to see your location alongside the driver."}</span>
-                          </div>
-                          {customerLocation ? (
-                            <button onClick={() => setCustomerLocation(null)} type="button">Remove pin</button>
-                          ) : (
-                            <button disabled={locatingCustomer} onClick={useCurrentLocation} type="button">{locatingCustomer ? "Finding location…" : "Use my location"}</button>
-                          )}
-                          {customerLocationError && <p role="alert">{customerLocationError}</p>}
                         </div>
                       </section>
                       <section className={tw("customer-checkout-section")}>
@@ -775,28 +701,12 @@ export function AccountDashboard() {
 
           {location.pathname === "/account/orders" && (
             <section className={tw("dashboard-panel dashboard-page-panel")}>
-              {trackingError && <p className={tw("dashboard-error")} role="alert">{trackingError}</p>}
-              {customerDeliveries.length > 0 ? (
-                <div className={tw("customer-delivery-tracking-list")}>
-                  <div className={tw("customer-tracking-intro")}>
-                    <p className={tw("dashboard-section-kicker")}>ON THE WAY</p>
-                    <h2 className={tw("dashboard-panel-title")}>Your active delivery</h2>
-                    <p>Driver location refreshes automatically while they are sharing it.</p>
-                  </div>
-                  {customerDeliveries.map((delivery) => (
-                    <Suspense fallback={<div className={tw("delivery-map-loading")} role="status">Loading delivery map…</div>} key={delivery.id}>
-                      <DeliveryTrackingMap delivery={delivery} />
-                    </Suspense>
-                  ))}
-                </div>
-              ) : (
               <div className={tw("dashboard-empty-state")}>
                 <span className={tw("dashboard-empty-icon")} aria-hidden="true">☕</span>
-                <h2 className={tw("dashboard-empty-title")}>No active deliveries</h2>
-                <p className={tw("dashboard-empty-description")}>When your order is out for delivery, you’ll see the driver’s live location and an approximate arrival estimate here.</p>
+                <h2 className={tw("dashboard-empty-title")}>No recent orders</h2>
+                <p className={tw("dashboard-empty-description")}>Your dine-in and takeout orders will appear here after checkout.</p>
                 <Link className={tw("dashboard-order-button")} to="/account/browse-order">Browse the menu <span aria-hidden="true">→</span></Link>
               </div>
-              )}
             </section>
           )}
 
@@ -805,8 +715,8 @@ export function AccountDashboard() {
               <div style={{ display: "grid", gap: "24px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
                   <div>
-                    <p className={tw("dashboard-section-kicker")}>DELIVERY</p>
-                    <h2 className={tw("dashboard-panel-title")}>New delivery order</h2>
+                    <p className={tw("dashboard-section-kicker")}>ORDER ONLINE</p>
+                    <h2 className={tw("dashboard-panel-title")}>New café order</h2>
                   </div>
                   <span className={tw("dashboard-preview-tag")}>{cartCount} item{cartCount === 1 ? "" : "s"} selected</span>
                 </div>

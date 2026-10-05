@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -127,12 +128,12 @@ class AdminWorkspaceController extends Controller
             'inventory-transactions' => $this->rows('inventory_transactions'),
             'recipes' => $this->rows('recipes'),
             'recipe-items' => $this->rows('recipe_items'),
-            'deliveries' => $this->rows('deliveries'),
+            'deliveries' => $this->deliveryRows(),
             'delivery-riders' => DB::table('users')
                 ->join('role_user', 'role_user.user_id', '=', 'users.id')
                 ->join('roles', 'roles.id', '=', 'role_user.role_id')
                 ->where('users.is_active', true)
-                ->whereIn('roles.name', ['manager', 'cashier', 'staff'])
+                ->whereIn('roles.name', ['manager', 'cashier', 'driver', 'staff'])
                 ->select('users.id', 'users.name')
                 ->distinct()
                 ->orderBy('users.name')
@@ -497,7 +498,7 @@ class AdminWorkspaceController extends Controller
     {
         $user = $this->authorizeAdmin($request, 'pos.use');
         $data = $request->validate([
-            'order_type' => 'required|in:dine_in,takeout,delivery',
+            'order_type' => 'required|in:dine_in,takeout',
             'customer_id' => 'nullable|integer|exists:customers,id',
             'status' => 'sometimes|in:draft,held,confirmed',
             'notes' => 'nullable|string',
@@ -511,7 +512,7 @@ class AdminWorkspaceController extends Controller
             'items.*.modifier_option_ids.*' => 'integer|distinct|exists:modifier_options,id',
             'table_ids' => 'sometimes|array',
             'table_ids.*' => 'integer|exists:dining_tables,id',
-            'address_id' => 'required_if:order_type,delivery|nullable|integer|exists:customer_addresses,id',
+            'address_id' => 'prohibited|nullable',
             'discount_id' => 'nullable|integer|exists:discounts,id',
         ]);
 
@@ -1010,11 +1011,11 @@ class AdminWorkspaceController extends Controller
             'name' => 'required|string|max:150',
             'email' => 'required|email|max:255|unique:users,email',
             'password' => ['required', 'string', 'min:12', 'max:255'],
-            'role' => ['required', Rule::in(['admin', 'manager', 'cashier', 'staff'])],
+            'role' => ['required', Rule::in(['admin', 'manager', 'cashier', 'driver', 'staff'])],
         ]);
         $user = DB::transaction(function () use ($data): User {
             $user = User::create(['name' => $data['name'], 'email' => $data['email'], 'password' => $data['password']]);
-            $user->roles()->attach(Role::where('name', $data['role'])->firstOrFail());
+            $user->roles()->attach($this->ensureRole($data['role'])->id);
 
             return $user;
         });
@@ -1028,7 +1029,7 @@ class AdminWorkspaceController extends Controller
         $data = $request->validate([
             'name' => 'sometimes|required|string|max:150',
             'email' => ['sometimes', 'required', 'email', 'max:255', Rule::unique('users')->ignore($id)],
-            'role' => ['sometimes', 'required', Rule::in(['admin', 'manager', 'cashier', 'staff'])],
+            'role' => ['sometimes', 'required', Rule::in(['admin', 'manager', 'cashier', 'driver', 'staff'])],
             'is_active' => 'sometimes|boolean',
             'password' => 'sometimes|required|string|min:12|max:255',
         ]);
@@ -1041,7 +1042,7 @@ class AdminWorkspaceController extends Controller
             $fields = array_intersect_key($data, array_flip(['name', 'email', 'password', 'is_active']));
             $target->forceFill($fields)->save();
             if (isset($data['role'])) {
-                $target->roles()->sync([Role::where('name', $data['role'])->firstOrFail()->id]);
+                $target->roles()->sync([$this->ensureRole($data['role'])->id]);
             }
         });
 
@@ -1056,6 +1057,32 @@ class AdminWorkspaceController extends Controller
     private function staffRecord(User $user): array
     {
         return ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'role' => $user->roles->first()?->name, 'is_active' => $user->is_active, 'created_at' => $user->created_at];
+    }
+
+    private function ensureRole(string $name): Role
+    {
+        $labels = [
+            'admin' => 'Administrator',
+            'manager' => 'Manager',
+            'cashier' => 'Cashier',
+            'driver' => 'Driver',
+            'staff' => 'Staff',
+        ];
+
+        $role = Role::firstOrCreate(
+            ['name' => $name],
+            ['display_name' => $labels[$name] ?? ucfirst($name)],
+        );
+
+        if ($name === 'driver') {
+            $permissionIds = collect([
+                ['name' => 'dashboard.view', 'display_name' => 'View dashboard'],
+                ['name' => 'delivery.manage', 'display_name' => 'Manage deliveries'],
+            ])->map(fn (array $permission): int => Permission::firstOrCreate($permission)->id)->all();
+            $role->permissions()->syncWithoutDetaching($permissionIds);
+        }
+
+        return $role;
     }
 
     private function resource(string $name): array
@@ -1190,6 +1217,24 @@ class AdminWorkspaceController extends Controller
         return $query->orderByDesc('id')->limit(500)->get();
     }
 
+    private function deliveryRows(): object
+    {
+        return DB::table('deliveries')
+            ->leftJoin('customer_addresses', 'customer_addresses.id', '=', 'deliveries.customer_address_id')
+            ->select('deliveries.*', 'customer_addresses.latitude as customer_latitude', 'customer_addresses.longitude as customer_longitude')
+            ->orderByDesc('deliveries.id')
+            ->limit(500)
+            ->get()
+            ->map(function (object $delivery): object {
+                $delivery->customer_latitude = $delivery->customer_latitude === null ? null : (float) $delivery->customer_latitude;
+                $delivery->customer_longitude = $delivery->customer_longitude === null ? null : (float) $delivery->customer_longitude;
+                $delivery->rider_latitude = $delivery->rider_latitude === null ? null : (float) $delivery->rider_latitude;
+                $delivery->rider_longitude = $delivery->rider_longitude === null ? null : (float) $delivery->rider_longitude;
+
+                return $delivery;
+            });
+    }
+
     private function columns(string $table): array
     {
         return Schema::getColumnListing($table);
@@ -1207,6 +1252,20 @@ class AdminWorkspaceController extends Controller
 
     private function paymentMethodSettingValue(Request $request, mixed $value, mixed $key): mixed
     {
+        if ($key === 'featured_images') {
+            $images = is_string($value) ? json_decode($value, true) : $value;
+            if (! is_array($images)) {
+                throw ValidationException::withMessages(['value' => ['Featured images must be a JSON object.']]);
+            }
+            foreach (['hero', 'story', 'menu_1', 'menu_2', 'menu_3'] as $slot) {
+                $file = $request->file("featured_image_{$slot}");
+                if ($file) {
+                    $request->validate(["featured_image_{$slot}" => 'image|mimes:jpg,jpeg,png,webp|max:5120']);
+                    $images[$slot] = $file->store('landing', 'public');
+                }
+            }
+            return $images;
+        }
         if ($key !== 'payment_methods') {
             return $value;
         }

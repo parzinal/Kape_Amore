@@ -4,17 +4,16 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Api\AdminWorkspaceController;
 use App\Http\Controllers\Api\CustomerCatalogController;
 use App\Http\Controllers\Api\CustomerCheckoutController;
-use App\Http\Controllers\Api\DeliveryTrackingController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/landing-images', [CustomerCatalogController::class, 'landing']);
 
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/user', [AuthController::class, 'currentUser']);
     Route::get('/customer/catalog', [CustomerCatalogController::class, 'index']);
     Route::get('/customer/payment-methods', [CustomerCheckoutController::class, 'paymentMethods']);
     Route::post('/customer/checkout', [CustomerCheckoutController::class, 'checkout']);
-    Route::get('/customer/deliveries', [DeliveryTrackingController::class, 'customerDeliveries']);
-    Route::post('/driver/deliveries/{delivery}/location', [DeliveryTrackingController::class, 'shareLocation'])->whereNumber('delivery');
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->get('/admin/me', function (Request $request) {

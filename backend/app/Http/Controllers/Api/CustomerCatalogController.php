@@ -54,4 +54,12 @@ class CustomerCatalogController extends Controller
             ],
         ]);
     }
+
+    public function landing(): JsonResponse
+    {
+        $value = DB::table('settings')->where('key', 'featured_images')->value('value');
+        $images = is_string($value) ? json_decode($value, true) : [];
+
+        return response()->json(['images' => is_array($images) ? $images : []]);
+    }
 }

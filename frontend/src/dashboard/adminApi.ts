@@ -33,6 +33,7 @@ export type PaymentMethod = {
 };
 
 export type CustomerCheckoutInput = {
+  order_type: "dine_in" | "takeout";
   payment_method: string;
   items: Array<{ product_id: number; variation_id: number | null; quantity: number }>;
   recipient_name: string;
@@ -177,7 +178,11 @@ async function mutate<T>(path: string, method: string, body: unknown): Promise<T
     headers: { Accept: "application/json" },
   });
   if (!csrf.ok) throw new Error("Unable to start a secure session. Check that the Laravel server is running.");
-  return request<T>(path, { method, body: body instanceof FormData ? body : JSON.stringify(body) });
+  if (body instanceof FormData) {
+    if (!body.has("_method")) body.append("_method", method);
+    return request<T>(path, { method: "POST", body });
+  }
+  return request<T>(path, { method, body: JSON.stringify(body) });
 }
 
 export const adminApi = {
@@ -197,6 +202,7 @@ export const adminApi = {
 };
 
 export const customerApi = {
+  landingImages: () => request<{ images: Record<string, string> }>("/api/landing-images"),
   catalog: () => request<CustomerCatalog>("/api/customer/catalog"),
   paymentMethods: () => request<{ methods: PaymentMethod[] }>("/api/customer/payment-methods"),
   checkout: (body: CustomerCheckoutInput) => mutate<CustomerCheckoutResult>("/api/customer/checkout", "POST", body),

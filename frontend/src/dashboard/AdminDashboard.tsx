@@ -14,11 +14,11 @@ const navigation: DashboardNavItem[] = [
   { label: "Menu & catalog", to: "/admin/menu", icon: "menu" },
   { label: "Tables", to: "/admin/tables", icon: "tables" },
   { label: "Payments", to: "/admin/payments", icon: "orders" },
-  { label: "Delivery", to: "/admin/delivery", icon: "delivery" },
   { label: "Customers", to: "/admin/customers", icon: "customers" },
   { label: "Team & access", to: "/admin/team", icon: "team" },
   { label: "Reports", to: "/admin/reports", icon: "reports" },
   { label: "Settings", to: "/admin/settings", icon: "settings" },
+  { label: "Landing page", to: "/admin/landing", icon: "menu" },
 ];
 const permissionForPath: Record<string, string> = {
   "/admin": "dashboard.view",
@@ -27,11 +27,11 @@ const permissionForPath: Record<string, string> = {
   "/admin/tables": "tables.manage",
   "/admin/payments": "payments.manage",
   "/admin/inventory": "inventory.manage",
-  "/admin/delivery": "delivery.manage",
   "/admin/customers": "customers.manage",
   "/admin/team": "admin.manage",
   "/admin/reports": "reports.view",
   "/admin/settings": "admin.manage",
+  "/admin/landing": "admin.manage",
 };
 
 const details: Record<string, { eyebrow: string; title: string; description: string }> = {
@@ -41,11 +41,11 @@ const details: Record<string, { eyebrow: string; title: string; description: str
   "/admin/tables": { eyebrow: "DINE IN", title: "Tables", description: "Manage table capacity, seating areas, and availability." },
   "/admin/payments": { eyebrow: "CHECKOUT", title: "Payments", description: "Accept split payments and record payment refunds." },
   "/admin/inventory": { eyebrow: "STOCK CONTROL", title: "Inventory", description: "Maintain ingredient quantities and a traceable stock ledger." },
-  "/admin/delivery": { eyebrow: "FULFILMENT", title: "Delivery", description: "Manage delivery orders, assign drivers, and follow customer deliveries." },
   "/admin/customers": { eyebrow: "GUESTS", title: "Customers", description: "Manage profiles, addresses, order history, and loyalty adjustments." },
   "/admin/team": { eyebrow: "STAFF ACCESS", title: "Team & access", description: "Provision staff accounts and review administrative activity." },
   "/admin/reports": { eyebrow: "BUSINESS INSIGHTS", title: "Reports", description: "Analyze recorded sales, payment methods, and best-selling items." },
   "/admin/settings": { eyebrow: "CONFIGURATION", title: "Settings", description: "Manage shop, tax, service-charge, receipt, and POS preferences." },
+  "/admin/landing": { eyebrow: "WEBSITE", title: "Landing page", description: "Change the featured images visitors see on the café homepage." },
 };
 
 function money(value: number): string {
