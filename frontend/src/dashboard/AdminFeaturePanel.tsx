@@ -114,7 +114,7 @@ const resourceConfigs: Record<string, ResourceConfig[]> = {
     { title: "Stock ledger", resource: "inventory-transactions", fields: [{ name: "ingredient_id", label: "Ingredient", type: "select", required: true, options: optionsFrom("ingredients", (record) => `${record.name} (${record.quantity_on_hand} ${record.unit})`) }, { name: "type", label: "Movement", type: "select", required: true, options: () => [{ value: "stock_in", label: "Stock in" }, { value: "adjustment", label: "Set balance" }, { value: "waste", label: "Waste" }, { value: "return", label: "Return" }] }, { name: "quantity", label: "Quantity", type: "number", min: "0.001", required: true }, { name: "reference", label: "Reference" }, { name: "notes", label: "Notes" }], columns: ["ingredient_id", "type", "quantity_change", "quantity_after", "reference", "created_at"], createOnly: true },
   ],
   team: [
-    { title: "Staff accounts", resource: "staff", fields: [{ name: "name", label: "Full name", required: true }, { name: "email", label: "Email", type: "email", required: true }, { name: "password", label: "Initial password (minimum 12 characters)", type: "password", required: true }, { name: "role", label: "Role", type: "select", required: true, options: () => ["admin", "manager", "cashier", "staff"].map((value) => ({ value, label: value })) }], columns: ["name", "email", "role", "is_active", "created_at"] },
+    { title: "Team members", resource: "staff", fields: [{ name: "name", label: "Full name", required: true }, { name: "email", label: "Work email", type: "email", required: true }, { name: "password", label: "Temporary password (minimum 12 characters)", type: "password", required: true }, { name: "role", label: "What can this person do?", type: "select", required: true, options: () => ["admin", "manager", "cashier", "staff"].map((value) => ({ value, label: value === "admin" ? "Administrator — everything" : value === "manager" ? "Manager — daily operations" : value === "cashier" ? "Cashier — sales and payments" : "Staff — basic access" })) }], columns: ["name", "email", "role", "is_active", "created_at"] },
     { title: "Permission definitions", resource: "permissions", fields: [{ name: "name", label: "Permission key", required: true }, { name: "display_name", label: "Display name", required: true }], columns: ["name", "display_name"] },
     { title: "Activity log", resource: "activity", fields: [], columns: ["user_id", "action", "subject_type", "subject_id", "ip_address", "created_at"], readOnly: true },
   ],
@@ -474,6 +474,12 @@ function RolePermissionPanel({ workspace, onRefresh }: { workspace: AdminWorkspa
   const roles = workspace.records.roles ?? [];
   const permissions = workspace.records.permissions ?? [];
   const assignments = workspace.records["role-permissions"] ?? [];
+  const roleDescriptions: Record<string, string> = {
+    admin: "Full access to settings, staff, reports, and café operations.",
+    manager: "Manage daily operations, orders, menu, and team workflows.",
+    cashier: "Create orders, take payments, and help customers at the counter.",
+    staff: "Limited access for day-to-day café support.",
+  };
 
   useEffect(() => {
     setPermissionIds(assignments.filter((item) => item.role_id === Number(roleId)).map((item) => Number(item.permission_id)));
@@ -495,10 +501,22 @@ function RolePermissionPanel({ workspace, onRefresh }: { workspace: AdminWorkspa
 
   return (
     <section className={tw("dashboard-panel admin-resource-panel")} aria-label="Role permissions">
-      <div className={tw("dashboard-panel-heading")}><div><p className={tw("dashboard-section-kicker")}>ACCESS CONTROL</p><h2 className={tw("dashboard-panel-title")}>Permissions by role</h2></div></div>
+      <div className={tw("dashboard-panel-heading")}><div><p className={tw("dashboard-section-kicker")}>ACCESS CONTROL</p><h2 className={tw("dashboard-panel-title")}>Choose what each role can access</h2></div></div>
+      <p className={tw("admin-form-help")}>Select a role, review its access, and save. Team members inherit these permissions when they sign in.</p>
+      <div className={tw("admin-role-cards")}>{roles.map((role) => {
+        const key = String(role.name ?? "").toLowerCase();
+        const selected = roleId === String(role.id);
+        const assignedCount = assignments.filter((item) => item.role_id === role.id).length;
+        return <button className={tw(`admin-role-card ${selected ? "admin-role-card-selected" : ""}`)} key={role.id} onClick={() => setRoleId(String(role.id))} type="button">
+          <span className={tw("admin-role-avatar")}>{String(role.display_name ?? role.name ?? "?").slice(0, 1).toUpperCase()}</span>
+          <strong>{String(role.display_name ?? role.name)}</strong>
+          <small>{roleDescriptions[key] ?? "Custom access for this team role."}</small>
+          <em>{assignedCount} permission{assignedCount === 1 ? "" : "s"}</em>
+        </button>;
+      })}</div>
       <form className={tw("admin-assignment-form")} onSubmit={(event) => void save(event)}>
         <label className={tw("admin-field")}><span>Role</span><select className={tw("admin-input")} onChange={(event) => setRoleId(event.target.value)} required value={roleId}><option value="">Select role…</option>{roles.map((role) => <option key={role.id} value={role.id}>{String(role.display_name)}</option>)}</select></label>
-        <div className={tw("admin-checkbox-list")}>{permissions.map((permission) => <label className={tw("admin-assignment-checkbox")} key={permission.id}><input checked={permissionIds.includes(permission.id)} onChange={(event) => setPermissionIds((current) => event.target.checked ? [...current, permission.id] : current.filter((id) => id !== permission.id))} type="checkbox" /><span>{String(permission.display_name)}</span></label>)}{permissions.length === 0 && <p className={tw("admin-empty-copy")}>Add permission definitions above to assign access.</p>}</div>
+        <div className={tw("admin-checkbox-list")}>{permissions.map((permission) => <label className={tw("admin-assignment-checkbox")} key={permission.id}><input checked={permissionIds.includes(permission.id)} onChange={(event) => setPermissionIds((current) => event.target.checked ? [...current, permission.id] : current.filter((id) => id !== permission.id))} type="checkbox" /><span><strong>{String(permission.display_name)}</strong><small>{String(permission.name).replace(/\./g, " · ")}</small></span></label>)}{permissions.length === 0 && <p className={tw("admin-empty-copy")}>No access options are available yet.</p>}</div>
         {error && <p className={tw("admin-form-error")} role="alert">{error}</p>}
         <button className={tw("admin-primary-button")} disabled={busy || !roleId} type="submit">{busy ? "Saving…" : "Save role permissions"}</button>
       </form>

@@ -280,27 +280,33 @@ function Reports({ onError }: { onError: (message: string | null) => void }) {
       </section>
       {report && (
         <>
-          <section className={tw("dashboard-stat-grid")} aria-label="Sales report totals">
-            <article className={tw("dashboard-stat-card admin-overview-stat")}><p className={tw("dashboard-stat-label")}>Completed sales</p><strong className={tw("dashboard-stat-value")}>{money(Number(report.sales))}</strong></article>
-            <article className={tw("dashboard-stat-card admin-overview-stat")}><p className={tw("dashboard-stat-label")}>Orders opened</p><strong className={tw("dashboard-stat-value")}>{report.orders}</strong></article>
-            <article className={tw("dashboard-stat-card admin-overview-stat")}><p className={tw("dashboard-stat-label")}>Average order value</p><strong className={tw("dashboard-stat-value")}>{money(report.orders ? Number(report.sales) / report.orders : 0)}</strong></article>
+          <section className={tw("admin-report-hero")} aria-label="Report overview">
+            <div><p className={tw("dashboard-section-kicker")}>PERFORMANCE SNAPSHOT</p><h2>What your numbers are saying</h2><p>Insights from completed orders between {from} and {to}.</p></div>
+            <span className={tw("admin-report-hero-mark")}>✦</span>
           </section>
-          <ReportTable title="Sales by service type" rows={report.by_type.map((row) => ({ label: row.order_type.replace(/_/g, " "), first: `${row.orders} orders`, second: money(Number(row.sales)) }))} />
-          <ReportTable title="Sales by payment method" rows={report.by_payment_method.map((row) => ({ label: row.method.replace(/_/g, " "), first: `${row.payments} payments`, second: money(Number(row.total)) }))} />
-          <ReportTable title="Sales by category" rows={report.by_category.map((row) => ({ label: row.category, first: `${row.quantity} items`, second: money(Number(row.sales)) }))} />
-          <ReportTable title="Employee sales" rows={report.by_employee.map((row) => ({ label: row.name, first: `${row.orders} orders`, second: money(Number(row.sales)) }))} />
-          <ReportTable title="Best-selling products" rows={report.best_sellers.map((row) => ({ label: row.product_name, first: `${row.quantity} sold`, second: money(Number(row.sales)) }))} />
+          <section className={tw("admin-report-insight-grid")} aria-label="Sales report totals">
+            <article className={tw("admin-report-insight-card admin-report-insight-revenue")}><span>Revenue captured</span><strong>{money(Number(report.sales))}</strong><small>Across {report.orders} completed orders</small><i>↗</i></article>
+            <article className={tw("admin-report-insight-card")}><span>Average order value</span><strong>{money(report.orders ? Number(report.sales) / report.orders : 0)}</strong><small>Typical spend per order</small><i>₱</i></article>
+            <article className={tw("admin-report-insight-card")}><span>Top service</span><strong>{report.by_type[0]?.order_type?.replace(/_/g, " ") ?? "—"}</strong><small>{report.by_type[0] ? `${report.by_type[0].orders} orders · ${money(Number(report.by_type[0].sales))}` : "No service data yet"}</small><i>⌂</i></article>
+          </section>
+          <section className={tw("admin-report-visual-grid")}>
+            <ReportBarChart title="Sales by service" subtitle="Where orders are being placed" rows={report.by_type.map((row) => ({ label: row.order_type.replace(/_/g, " "), value: Number(row.sales), note: `${row.orders} orders` }))} format={money} />
+            <ReportBarChart title="Payment mix" subtitle="How customers are paying" rows={report.by_payment_method.map((row) => ({ label: row.method.replace(/_/g, " "), value: Number(row.total), note: `${row.payments} payments` }))} format={money} />
+            <ReportBarChart title="Best-selling products" subtitle="Products driving the most sales" rows={report.best_sellers.map((row) => ({ label: row.product_name, value: Number(row.sales), note: `${row.quantity} sold` }))} format={money} />
+            <ReportBarChart title="Category performance" subtitle="Revenue contribution by category" rows={report.by_category.map((row) => ({ label: row.category, value: Number(row.sales), note: `${row.quantity} items` }))} format={money} />
+          </section>
         </>
       )}
     </div>
   );
 }
 
-function ReportTable({ title, rows }: { title: string; rows: Array<{ label: string; first: string; second: string }> }) {
-  return <section className={tw("dashboard-panel admin-resource-panel")}><div className={tw("dashboard-panel-heading")}><h2 className={tw("dashboard-panel-title")}>{title}</h2></div><div className={tw("admin-report-list")}>
-    {rows.map((row) => <div className={tw("admin-report-row")} key={row.label}><strong>{row.label}</strong><span>{row.first}</span><b>{row.second}</b></div>)}
+function ReportBarChart({ title, subtitle, rows, format }: { title: string; subtitle: string; rows: Array<{ label: string; value: number; note: string }>; format: (value: number) => string }) {
+  const max = Math.max(...rows.map((row) => row.value), 1);
+  return <section className={tw("admin-report-chart-card")}><div className={tw("admin-report-chart-heading")}><div><h2>{title}</h2><p>{subtitle}</p></div><span>INSIGHTS</span></div>
+    <div className={tw("admin-report-bars")}>{rows.slice(0, 5).map((row) => <div className={tw("admin-report-bar-row")} key={row.label}><div className={tw("admin-report-bar-meta")}><strong>{row.label}</strong><span>{row.note} · {format(row.value)}</span></div><div className={tw("admin-report-bar-track")}><i style={{ width: `${Math.max(5, (row.value / max) * 100)}%` }} /></div></div>)}</div>
     {rows.length === 0 && <p className={tw("admin-empty-copy")}>No data for this period yet.</p>}
-  </div></section>;
+  </section>;
 }
 
 export function AdminDashboard() {
